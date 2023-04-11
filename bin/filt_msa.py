@@ -5,12 +5,11 @@
 
 """ Controls the flow for Guidance2 generation, assessment, and filtering."""
 
-import glob, logging, shutil, subprocess, sys, time
+import glob, logging, os, shutil, subprocess, sys, time
 import numpy as np
 from Bio import SeqIO
 from pathlib import Path
 from datetime import timedelta
-
 
 
 def prep_dir(proj_name):
@@ -23,6 +22,7 @@ def prep_dir(proj_name):
     Path(sdir).mkdir(parents = True, exist_ok = True)
     Path(fdir).mkdir(parents = True, exist_ok = True)
     Path(f'{gdir}Converted_SeqCodes/').mkdir(parents = True, exist_ok = True)
+
     return gdir, sdir, fdir
 
 
@@ -59,7 +59,9 @@ def run_guidance(guidance_path: str,
                 threads: int = 1,
                 iteration: int = 1,
                 quiet: bool = False) -> str:
+
     temp_outdir = tmp_msa.rstrip('.fas')
+
     guid_cmd = (f'perl {guidance_path} ' \
         f'--seqFile {tmp_msa} ' \
         f'--msaProgram MAFFT ' \
@@ -74,14 +76,17 @@ def run_guidance(guidance_path: str,
         f'--maxiterate 200 '
         f'--thread {threads} '\
         f'--bl 62 --anysymbol"')
+
     guid_call = subprocess.call(guid_cmd, shell = True,
         stderr = subprocess.DEVNULL, stdout = subprocess.DEVNULL)
+
     return temp_outdir
 
 
 def check_fasta(msa_file):
     if open(msa_file).read().count('>') > 4:
         return True
+
     else:
         return False
 
@@ -128,6 +133,7 @@ def save_seqs(seq_list, tmp_msa, tmp_outdir, pass_seq_fas, filt_seq_fas):
 
 def rename_seqs(seq_list, seq_codes, outfas):
     renamed_seqs = [f'>{seq_codes[i[0]]}\n{i[1]}\n' for i in seq_list]
+
     with open(outfas,'w+') as w:
         w.write(''.join(renamed_seqs))
 
@@ -156,6 +162,7 @@ def guid_eval(tmp_msa, tmp_outdir, scdir, fdir, seq_cutoff, max_iter, cur_iter):
 
         if save_seqs(seqs_passing, tmp_msa, tmp_outdir, pass_fas, filt_fas):
             return pass_fas
+
         else:
             return None
 
@@ -163,6 +170,8 @@ def guid_eval(tmp_msa, tmp_outdir, scdir, fdir, seq_cutoff, max_iter, cur_iter):
 def iter_guid(guid_path: str,
                 fasta_file: str,
                 gdir: str,
+                scdir: str,
+                fdir: str,
                 max_iter: int,
                 threads: int,
                 seq_cutoff: float,
@@ -180,6 +189,7 @@ def iter_guid(guid_path: str,
     for n in range(max_iter):
         if not check_fasta(cur_tmp_fas):
             break
+
         if not quiet:
             print(f'     [{timedelta(seconds=round(time.time()-sttime))}] Guidance2 iteration [{n + 1}]')
 
@@ -200,10 +210,11 @@ def iter_guid(guid_path: str,
                             n + 1)
 
         if not cur_tmp_fas or n + 1 == max_iter:
-            print('here')
             finalize_guid_output(tmp_outdir, snames)
+
             if not quiet:
                 print(f'     [{timedelta(seconds=round(time.time()-sttime))}] Guidance iterations finished\n')
+            break
 
 
 def clean_up(gdir):
@@ -222,7 +233,6 @@ def make_msa_files(guid_path,
 
     gdir, scdir, fdir = prep_dir(proj_name)
 
-
     init_fastas = glob.glob(f'{msa_dir}/*.fa*')
 
     if not quiet:
@@ -232,14 +242,18 @@ def make_msa_files(guid_path,
         if not quiet:
                     #--- MSA Building and Homology Assessment ---#
             print(f'|--- {fas.split("/")[1].split(".fa")[0]}')
+
         iter_guid(guid_path,
                     fas,
                     gdir,
+                    scdir,
+                    fdir,
                     max_iter,
                     threads,
                     seq_cutoff,
                     col_cutoff,
                     quiet)
+
         if not keep_all:
             clean_up(gdir)
 

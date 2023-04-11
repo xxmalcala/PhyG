@@ -28,3 +28,5 @@ if __name__ == '__main__':
     dpnd, args = ea.check_all()
     print(f'\n{ea.ascii_logo_vsn()}')
     prep_msa_files(dpnd['Guidance2'], args)
+
+    print('Thanks for using PhyG!')
