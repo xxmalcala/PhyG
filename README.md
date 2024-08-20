@@ -33,7 +33,7 @@ phyg.py -m <MSA-directory> -p <project-name>
 |---------------------------|-----------|
 | `-h`, `--help`  | Print the help message |
 | `-m`, `--msa-dir <STRING>`  | Directory with un-aligned FASTA formatted files. |
-| `-n`, `--porject-name <STRING>`  | Name for your project/outputs. |
+| `-n`, `--project-name <STRING>`  | Name for your project/outputs. |
 | `-t`, `--threads <INTEGER>`  | Number of available threads to use. Default value is `1`. |
 | `--iqr` | Use the inter-quartile range of mean pairwise distances for sequence homology filtering.|
 | `--guidance` | Run Guidance2 for homology filtering.|
