@@ -5,7 +5,8 @@ See the [PhyG wiki](https://github.com/xxmalcala/PhyG/wiki) for more details abo
 
  Key features of PhyG
 -----------------------
-* __Custom Gene Family Databases__: Support for adding taxa to pre-existing gene family databases. PhyG **will** provide several preformatted common phylogenomic databases (from eukaryotic tree of life studies).
+* __Custom Gene Family Databases__: Support for adding taxa to pre-existing gene family databases. <br>
+  * PhyG **will** provide several preformatted common phylogenomic databases (from eukaryotic tree of life studies).
 * __Efficient Alignment Refinement__: Multiple avenues for multi-sequence alignment, including use of reproducible natural language processing and machine-learning based filtering approaches.
 * __Quick Contamination Evaluation__: Several approaches for inferring putative contamination (eukaryote-eukaryote) to aid in further cleaning of tricky datasets.
 * __Streamlining Phylogenomics__: Provides a streamlined 'start-to-finish' means to generate single-gene phylogenies and/or gene tree-species tree phylogenomic reconstructions.
