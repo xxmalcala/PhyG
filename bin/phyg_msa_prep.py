@@ -150,6 +150,7 @@ def run_mafft(
                             stderr = subprocess.PIPE,
                             universal_newlines = True,
                             shell = True)
+
     stdout, sderr = mafft_rslt.communicate()
 
 
@@ -197,35 +198,71 @@ def size_filter_genes(
     size_distro_gfs.clear()
 
 
-def ngram_from_seq(
+def kmers_from_seq(
         seq: str,
-        ngram_len: int,
-        overlap: bool) -> list:
+        kmer_len: int,
+        overlap: bool) -> str:
+    """
+    Convert peptide sequence into a "sentence" of k-mers
 
+    Parameters
+    ----------
+    seq:        peptide sequence
+    kmer_len:   break 'seq' in k-mers of this length
+    overlap:    allow overlapping k-mers
+
+    Returns
+    ----------
+    "sentence" of k-mers
+    """
     if overlap:
-        return ' '.join([seq[n:n+ngram_len] for n in range(len(seq) - ngram_len + 1)])
+        return ' '.join([seq[n:n+kmer_len] for n in range(len(seq) - kmer_len + 1)])
 
     else:
-        return ' '.join([seq[n:n+ngram_len] for n in range(0, len(seq) - ngram_len + 1, ngram_len)])
+        return ' '.join([seq[n:n+kmer_len] for n in range(0, len(seq) - kmer_len + 1, kmer_len)])
 
 
-def prep_peptide_ngrams(
-        fasta_file: str,
-        ngram_len: int,
-        overlap: bool) -> list:
+def prep_peptide_kmers(
+        all_seqs: list,
+        kmer_len: int,
+        overlap: bool) -> dict:
+    """
+    Generate k-mer "sentences" for all peptides
 
+    Parameters
+    ----------
+    all_seqs:  list of peptide sequences
+    kmer_len:  break 'seq' in k-mers of this length
+    overlap:   allow overlapping k-mers
+
+    Returns
+    ----------
+    peptide_kmers:  dictionary of k-mer "sentences"
+    """
     peptide_ngrams = {}
 
-    for i in SeqIO.parse(fasta_file,'fasta'):
+    for i in all_seqs:
         if overlap:
-            peptide_ngrams[i.id] = ngram_from_seq(f'{i.seq}', ngram_len, True)
-        else:
-            peptide_ngrams[i.id] = ngram_from_seq(f'{i.seq}', ngram_len, False)
+            peptide_kmers[i.id] = kmers_from_seq(f'{i.seq}', ngram_len, True)
 
-    return peptide_ngrams
+        else:
+            peptide_kmers[i.id] = kmers_from_seq(f'{i.seq}', ngram_len, False)
+
+    return peptide_kmers
 
 
 def calc_distance_matrix(seqs: list):
+    """
+    Calculate Levenshtein distance matrix for k-mer "sentences"
+
+    Parameters
+    ----------
+    seqs:    list of k-mer "sentences"
+
+    Returns
+    ----------
+    matrix of k-mer "sentence" distances
+    """
     transformed_seqs = np.array(seqs).reshape(-1,1)
 
     dist_matrix = pdist(transformed_seqs, lambda x,y: distance(x[0],y[0]))
@@ -238,7 +275,22 @@ def bootstrap_metrics(
         nseqs: int = 100,
         reps: int = 100,
         threshold: int = 3) -> list:
+    """
+    Uses bootstrapped distance matrix of "sentence similarities" as basis
+    for removing outlier peptide sequences prior to alignment
 
+    Parameters
+    ----------
+    dist_matrix:  list of k-mer "sentences"
+    nseqs:        number of sequences to sample
+    reps:         number of bootstraps
+    threshold:    sequence distance threshold
+
+    Returns
+    ----------
+    bootstrap_outlier_seqs:  outlier sequence names
+    outlier_seq_scores:      all sequence distance scores
+    """
     dm_median = [np.median(i) for i in dist_matrix]
 
     pseudo_reps = [(np.mean(i), np.std(i)) for i in np.random.choice(dm_median, size=(nseqs, len(dm_median)))]
@@ -251,12 +303,27 @@ def bootstrap_metrics(
 
     outlier_seq_scores = [((dm_median[n] - pseudo_mean)/pseudo_std) for n in range(len(dm_median))]
 
+    del pseudo_reps
+
     return bootstrap_outlier_seqs, outlier_seq_scores
+
 
 def iqr_metrics(
         dist_matrix,
-        threshold: int = 2) -> list:
+        threshold: int = 3) -> list:
+    """
+    Uses inter-quartile ranges of the "sentence similarities" distance matrix
+    for removing outlier peptide sequences prior to alignment
 
+    Parameters
+    ----------
+    dist_matrix:  list of k-mer "sentences"
+    threshold:    sequence distance threshold
+
+    Returns
+    ----------
+    iqr_outlier_seqs:  outlier sequence names
+    """
     dm_median = [np.median(i) for i in dist_matrix]
     q1, q3 = np.percentile(dm_median, 25), np.percentile(dm_median, 75)
 
@@ -276,25 +343,42 @@ def iqr_metrics(
 
 
 def sen_sim_remove_outlier_seqs(
-        fasta_file: str,
+        all_seqs: list,
         bootstrap: bool = True,
         iqr: bool = False,
+        lof: bool = False,
         nseqs: int = 100,
         reps: int = 100,
-        threshold: int = 2,
-        threads: int = 4) -> list:
+        threshold: int = 2) -> list:
+    """
+    Uses "sentence similarities" distance matrix (bootstrap, IQR, or bootstrap
+    with local outlier factors) for removing outlier peptide sequences prior to alignment
 
+    Parameters
+    ----------
+    all_seqs:   list of peptide sequences
+    bootstrap:  bootstrap sample peptides
+    iqr:        inter-quartile ranges of "sentence similarity"
+    nseqs:      number of sequences to sample
+    reps:       number of bootstraps
+    threshold:  sequence distance threshold
+    lof:        use unsupervised local outlier factors to refine outlier sequence detection
+
+    Returns
+    ----------
+    outlier_seqs:        outlier sequence records
+    clean_seqs:          non-outlier sequence records
+    outlier_seq_scores:  all sequences' "sentence similarity" scores
+    """
 # add option to couple with LOF
 
-
-
     clean_seqs, outlier_seqs = [], []
-
-    all_seqs = [i for i in SeqIO.parse(fasta_file,'fasta')]
 
     seq_list = [f'{i.seq}' for i in all_seqs]
 
     dist_matrix = calc_distance_matrix(seq_list)
+
+    del seq_list
 
     if not iqr:
         bootstrap_outlier_seqs, outlier_seq_scores = bootstrap_metrics(
@@ -303,13 +387,14 @@ def sen_sim_remove_outlier_seqs(
                                                         reps,
                                                         threshold)
 
-        if bootstrap:
+        if bootstrap and not lof:
             for n in range(len(all_seqs)):
                 if n in bootstrap_outlier_seqs:
                     outlier_seqs.append(all_seqs[n])
                 else:
                     clean_seqs.append(all_seqs[n])
-        else:
+
+        elif bootstrap and lof:
             oss = np.array(outlier_seq_scores).reshape(-1,1)
 
             lof_preds = cluster_lof(
@@ -320,6 +405,7 @@ def sen_sim_remove_outlier_seqs(
             for n in range(len(all_seqs)):
                 if lof_preds[n] == -1:
                     outlier_seqs.append(all_seqs[n])
+
                 else:
                     clean_seqs.append(all_seqs[n])
 
@@ -336,7 +422,7 @@ def sen_sim_remove_outlier_seqs(
 
 
 def kmer_remove_outlier_seqs(
-        fasta_file: str,
+        all_seqs: list,
         ngram_len: int = 5,
         overlap: bool = True,
         threads: int = 4) -> list:
@@ -345,10 +431,8 @@ def kmer_remove_outlier_seqs(
 
     clean_seqs, outlier_seqs = [], []
 
-    all_seqs = [i for i in SeqIO.parse(fasta_file,'fasta')]
-
-    peptide_ngrams = prep_peptide_ngrams(
-                        fasta_file,
+    peptide_ngrams = prep_peptide_kmers(
+                        all_seqs,
                         ngram_len,
                         overlap)
 
@@ -419,6 +503,7 @@ def filter_families(
         outlier_dist_filt_thresh: int = 2,
         outlier_dist_filt_nseqs: int = 100,
         outlier_dist_filt_reps: int = 100,
+        local_outlier_factor: bool = False,
         threads = 4) -> str:
     """
     Prepare FASTA files for a set of gene families and taxa.
@@ -470,23 +555,45 @@ def filter_families(
             for fasta_file in glob.glob(f'{gf_filt_wd}/*.fa*'):
                 out_fas = f'{fasta_file.rpartition("/")[-1].partition(".")[0]}'
 
+                all_seqs = [i for i in SeqIO.parse(fasta_file,'fasta')]
+
+                outlier_seqs, clean_seqs = [], []
+
                 if outlier_dist_filt:
-                    outlier_seqs, clean_seqs, seq_scores = sen_sim_remove_outlier_seqs(
-                                                            fasta_file,
+                    oss_out_seqs, oss_clean_seqs, seq_scores = sen_sim_remove_outlier_seqs(
+                                                            all_seqs,
                                                             outlier_dist_filt_boot,
                                                             outlier_dist_filt_iqr,
                                                             outlier_dist_filt_nseqs,
                                                             outlier_dist_filt_reps,
                                                             outlier_dist_filt_thresh,
-                                                            threads)
+                                                            local_outlier_factor)
 
-                elif kmer_filt:
+                if kmer_filt:
                     print('KMERS!')
-                    outlier_seqs, clean_seqs = kmer_remove_outlier_seqs(
-                                                fasta_file,
+                    km_out_seqs, km_clean_seqs = kmer_remove_outlier_seqs(
+                                                all_seqs,
                                                 kmer_filt_len,
                                                 True,
                                                 threads)
+
+                if outlier_dist_filt and kmer_filt:
+                    outier_seq_names = list(set([i.id for i in oss_out_seqs]) & set([i.id for i in km_out_seqs]))
+                    for i in all_seqs:
+                        if i.id in outlier_seq_names:
+                            outlier_seqs.append(i)
+                        else:
+                            clean_seqs.append(i)
+
+                elif outlier_dist_file and not kmer_filt:
+                    outlier_seqs = oss_out_seqs
+                    clean_seqs = oss_clean_seqs
+
+                elif kmer_filt and not outlier_dist_filt:
+                    outlier_seqs = km_out_seqs
+                    clean_seqs = km_clean_seqs
+
+                del all_seqs
 
                 if clean_seqs:
                     clean_seqs_fasta = f'{out_fas}.Post_Filter.Clean.fasta'
@@ -495,6 +602,7 @@ def filter_families(
                 if outlier_seqs:
                     removed_seqs_fasta = f'{out_fas}.Post_Filter.Removed.fasta'
                     SeqIO.write(outlier_seqs, f'{rm_seq_dir}{removed_seqs_fasta}','fasta')
+
         else:
             for fasta_file in glob.glob(f'{gf_filt_wd}/*.fa*'):
                 out_fas = f'{fasta_file.rpartition("/")[-1].rpartition(".")[0]}.UnAligned.fasta'
@@ -562,6 +670,7 @@ def prep_gfs_eval_msas(
         outlier_dist_filt_thresh: int = 3,
         outlier_dist_filt_nseqs: int = 100,
         outlier_dist_filt_reps: int = 100,
+        local_outlier_factor: bool = False
         threads: int = 4) -> str:
 
     init_gf_dir, gf_dict = gather_gfs(
@@ -571,8 +680,7 @@ def prep_gfs_eval_msas(
                                 taxon_list,
                                 gf_list,
                                 delim,
-                                og_delim
-                                )
+                                og_delim)
 
 
     unaln_wd = filter_families(
@@ -594,14 +702,14 @@ def prep_gfs_eval_msas(
                 outlier_dist_filt_thresh,
                 outlier_dist_filt_nseqs,
                 outlier_dist_filt_reps,
+                local_outlier_factor,
                 threads)
 
 
     aln_wd = align_msa_files(
                 unaln_wd,
                 msa_prog,
-                threads
-                )
+                threads)
 
 
     return aln_wd
