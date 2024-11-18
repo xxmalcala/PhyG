@@ -1,68 +1,85 @@
 #!/usr/bin/env python3
 
 
-import argparse, sys
+import argparse
 
-def collect_args():
+def capture_args():
+    # create the top-level parser
+    gen_descript = 'Something goes here...\n\nUsage:\n     phyg.py <module> <options>\n\n' \
+        'To see module options:\n     phyg.py <module> -h'
 
-    parser = argparse.ArgumentParser(description = 'Something goes here',
-            usage=argparse.SUPPRESS, add_help = False,
-            formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description = gen_descript,
+            usage = argparse.SUPPRESS, add_help = False,
+            formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    g = parser.add_argument_group('General Options', description = (
-    '''--out-dir (-o)        output directory name\n'''
-    '''--threads (-t)        number of CPU threads to use (default = 4)\n'''
+    parser.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
+    parser.add_argument('--version', action = 'store_true', help = argparse.SUPPRESS)
+
+    # create sub-parsers
+    sub_parsers = parser.add_subparsers(title = 'PhyG Modules', description = (
+    '''\nadd-taxa        assign gene families to a new dataset\n\n'''
+    '''contam          assess putative contamination\n\n'''
+    '''msa             multi-sequence alignment methods\n\n'''
+    '''tree            phylogenetic tree reconstructions methods\n\n'''
+    '''msa-tree        multi-sequence alignment and
+                single-gene tree reconstructions\n\n'''), help = argparse.SUPPRESS)
+
+    # create the parser for the "add-taxa" sub-command
+    parser_add_taxa = sub_parsers.add_parser('add-taxa', usage = argparse.SUPPRESS, add_help = False,
+                        formatter_class = argparse.RawDescriptionHelpFormatter)
+
+    add_taxa = parser_add_taxa.add_argument_group('General Adding-Taxa Options', description = (
+    '''--in (-i)             input FASTA file\n\n'''
+    '''--out-dir (-o)        output directory name\n\n'''
+    '''--taxon-name          taxon name (genus species)\n\n'''
+    '''--taxon-code          additional taxonomic code include\n\n'''
+    '''--transcripts         FASTA file includes transcripts\n\n'''
+    '''--orfs                FASTA file includes CDS/ORFs\n\n'''
+    '''--db (-d)             gene-family database (FASTA, DIAMOND, or HMMer format)\n\n'''
+    '''--delim               delimiter to use in sequence names
+                      (include quotations; default = '|')\n\n'''
+    '''--og-delim            delimiter for gene-family names in gene-family database\n\n'''
+    '''--gen-code (-g)       translation table to use to translate ORFs (default = 1)\n\n'''
+    '''--only-top-hit        keep only the top HSP-scoring hit for each gene-family\n\n'''
+    '''--threads (-t)        number of CPU threads to use (default = 4)\n\n'''
     '''--clean               remove intermediate files\n'''
     '''--quiet (-q)          no console output\n'''
     '''--gzip (-gz)          tar and gzip TIdeS output\n'''
-    '''--help (-h)           show this help message and exit'''))
+    '''--help (-h)           show this help message and exit\n'''))
 
-    g.add_argument('--help', '-h', action="help", help = argparse.SUPPRESS)
-
-    g.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
-        type = str, help = argparse.SUPPRESS)
-
-    g.add_argument('--threads','-t', action = 'store', default = 4,
-        metavar = '[Threads]', type = int, help = argparse.SUPPRESS)
-
-    g.add_argument('--quiet','-q', action = 'store_true',
-        help = argparse.SUPPRESS)
-
-    g.add_argument('--gzip','-gz', action = 'store_true',
-        help = argparse.SUPPRESS)
-
-    g.add_argument('--version', action = 'store_true',
-        help = argparse.SUPPRESS)
-
-    add_taxa = parser.add_argument_group('Adding-Taxa Options', description = (
-    '''--taxon-name          taxon name (genus species) [REQUIRED]\n'''
-    '''--taxon-code          additional taxonomic code include\n'''
-    '''--transcripts         assign gene families to FASTA file of transcripts\n'''
-    '''--orfs                assign gene families to FASTA file of CDS/ORFs\n'''
+    add_orfs = parser_add_taxa.add_argument_group('ORF and CDS Options', description = (
     '''--genbank             use if data are CDSs from GenBank or RefSeq\n'''
     '''--refseq              use if data are CDSs from GenBank or RefSeq\n'''
-    '''--all-isoforms        keep all CDS isoforms from a CDS file sourced from GenBank\n'''
-    '''--db (-db)            gene-family database (FASTA, DIAMOND, or HMMer format)\n'''
-    '''--min-len             minimum transcript length to evaluate\n'''
-    '''--evalue (-e)         maximum e-value to infer reference ORFs\n'''
-    '''--subject-cover       minimum alignment length (proportion of the hit)
-                      for a "hit" to the gene-family database (default = 60)\n'''
-    '''--query-cover         minimum alignment length (proportion of the query)
-                      for a "hit" to the gene-family database (default = 0)\n'''
-    '''--min-id              minimum % identity for a "hit" to the gene-family
-                      database (default = 0)\n'''
-    '''--delim               delimiter to use in sequence names
-                      (include quotations; default = '|')\n'''
-    '''--og-delim            delimiter for gene-family names in gene-family database\n'''
-    '''--gen-code (-g)       translation table to use to translate ORFs (default = 1)\n'''
-    '''--only-top-hit        keep only the top HSP-scoring hit for each gene-family\n\n'''))
+    '''--all-isoforms        keep all CDS isoforms from a CDS file sourced from GenBank\n'''))
 
+    add_txpts = parser_add_taxa.add_argument_group('Transcriptome Options', description = (
+    '''--min-len             minimum transcript length to evaluate\n'''))
+
+    add_blast = parser_add_taxa.add_argument_group('BLAST OG-Assignment Options', description = (
+    '''--evalue (-e)         maximum e-value to infer reference ORFs\n\n'''
+    '''--subject-cover       minimum alignment length (proportion of the hit)
+                      for a "hit" to the gene-family database (default = 60)\n\n'''
+    '''--query-cover         minimum alignment length (proportion of the query)
+                      for a "hit" to the gene-family database (default = 0)\n\n'''
+    '''--min-id              minimum % identity for a "hit" to the gene-family
+                      database (default = 0)\n\n'''))
+
+    add_blast = parser_add_taxa.add_argument_group('Hmmer OG-Assignment Options', description = (
+        '''--evalue (-e)         maximum e-value to infer reference ORFs\n\n'''))
+
+    add_taxa.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
+
+    add_taxa.add_argument('--in', '-i', action = 'store', metavar = '[FASTA-file]',
+        type = str, help = argparse.SUPPRESS)
+
+    add_taxa.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
+        type = str, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--taxon-name', action = 'store', metavar = '[taxon-name]',
-                nargs='+', type = str, help = argparse.SUPPRESS)
+        nargs='+', type = str, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--taxon-code', action = 'store', metavar = '[taxon-code]',
-                type = str, help = argparse.SUPPRESS)
+        type = str, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--transcripts', action = 'store', help = argparse.SUPPRESS)
 
@@ -72,156 +89,445 @@ def collect_args():
 
     add_taxa.add_argument('--refseq', action = 'store_true', help = argparse.SUPPRESS)
 
-    add_taxa.add_argument('--db', '-db', action = 'store', metavar = '[OG Database]',
-                type = str, help = argparse.SUPPRESS)
+    add_taxa.add_argument('--db', '-d', action = 'store', metavar = '[OG Database]',
+        type = str, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--evalue', '-e', action = 'store', default = 1e-10,
-                metavar = '[e-value]', type = float, help = argparse.SUPPRESS)
+        metavar = '[e-value]', type = float, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--subject-cover', action = 'store', default = 60,
-                metavar = '[subject-cover]', type = float, help = argparse.SUPPRESS)
+        metavar = '[subject-cover]', type = float, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--query-cover', action = 'store', default = 0,
-                metavar = '[query-cover]', type = float, help = argparse.SUPPRESS)
+        metavar = '[query-cover]', type = float, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--min-id', action = 'store', default = 0,
-                metavar = '[perc-identity]', type = float, help = argparse.SUPPRESS)
+        metavar = '[perc-identity]', type = float, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--min-length', action = 'store', default = 200,
-                metavar = '[min-transcript-length]', type = int, help = argparse.SUPPRESS)
+        metavar = '[min-transcript-length]', type = int, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--delim', action = 'store', default = '|',
-                metavar = '[name-delimiter]', type = str, help = argparse.SUPPRESS)
+        metavar = '[name-delimiter]', type = str, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--og-delim', action = 'store', default = '|',
-                metavar = '[gene-family-name-delimiter]', type = str, help = argparse.SUPPRESS)
+        metavar = '[gene-family-name-delimiter]', type = str, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--gen-code', '-g', action = 'store', default = '1',
-                metavar = '[translation-table]', type = str, help = argparse.SUPPRESS)
+        metavar = '[translation-table]', type = str, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--max-hits', action = 'store', default = 1,
-                metavar = '[max-gf-hits]', type = int, help = argparse.SUPPRESS)
+        metavar = '[max-gf-hits]', type = int, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--only-top-hit', action = 'store_true', help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--all-isoforms', action = 'store_true', help = argparse.SUPPRESS)
 
-    mng_aln = parser.add_argument_group('Alignment Options', description = (
-    '''--only-msa            runs just the multi-sequence alignment steps\n'''
-    '''--msa-dir             directory of unaligned MSAs\n'''
-    '''--prot-dir            directory of FASTA files of assigned gene families
-                      per taxon [REQUIRED]\n'''
-    '''--gf-list             list of gene families to align [REQUIRED]\n'''
-    '''--taxon-list          list of taxa to include in MSAs\n'''
-    '''--og-delim            delimiter for gene-family names for grabbing peptides\n'''
-    '''--no-size-filter      do not remove sequences if "too short/long"\n'''
-    '''--no-msa-filter       do not remove any sequences from the MSA\n'''
-    '''--size-filter-mean    filter sequences based on mean length of the gene-family\n'''
-    '''--size-filter-median  filter sequences based on median lengths of
-                      the gene-family (default)\n'''
+    add_taxa.add_argument('--threads','-t', action = 'store', default = 4,
+        metavar = '[Threads]', type = int, help = argparse.SUPPRESS)
+
+    add_taxa.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
+
+    add_taxa.add_argument('--quiet','-q', action = 'store_true', help = argparse.SUPPRESS)
+
+    add_taxa.add_argument('--gzip','-gz', action = 'store_true', help = argparse.SUPPRESS)
+
+    add_taxa.add_argument('--add_taxa', default = True, help = argparse.SUPPRESS)
+
+    # create the parser for the "contamination" sub-command
+    parser_contam = sub_parsers.add_parser('contam', usage = argparse.SUPPRESS, add_help = False,
+                        formatter_class = argparse.RawDescriptionHelpFormatter)
+
+    contam = parser_contam.add_argument_group('General Contamination Options', description = (
+    '''--in (-i)             input FASTA file\n\n'''
+    '''--out-dir (-o)        output directory name\n\n'''
+    '''--taxon-name          taxon name (genus species)\n\n'''
+    '''--taxon-code          additional taxonomic code include\n\n'''
+    '''--transcripts         FASTA file includes transcripts\n\n'''
+    '''--orfs                FASTA file includes predicted CDS/ORFs\n\n'''
+    '''--db (-d)             diagnostic gene-family database\n\n'''
+    '''--gen-code (-g)       translation table to use to translate ORFs (default = 1)\n\n'''
+    '''--kmer (-k)           k-mer based clustering\n\n'''
+    '''--phylo (-p)          phylogenetic based evaluation (default)\n\n'''
+    '''--threads (-t)        number of CPU threads to use (default = 4)\n\n'''
+    '''--clean               remove intermediate files\n\n'''
+    '''--quiet (-q)          no console output\n\n'''
+    '''--gzip (-gz)          tar and gzip TIdeS output\n\n'''
+    '''--help (-h)           show this help message and exit\n'''))
+
+    contam_kmer = parser_contam.add_argument_group('K-mer Based Options', description = (
+    '''Options to come?!     \n'''))
+
+    contam_phylo = parser_contam.add_argument_group('Phylogenetic Tree Based Options', description = (
+    '''--ref-msa (-m)            diagnostic mutli-sequence alignments\n\n'''
+    '''--ref-trees (-rt)         reference diagnostic phylogenies\n\n'''))
+
+    contam.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
+
+    contam.add_argument('--in', '-i', action = 'store', metavar = '[FASTA-file]',
+        type = str, help = argparse.SUPPRESS)
+
+    contam.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
+        type = str, help = argparse.SUPPRESS)
+
+    contam.add_argument('--taxon-name', action = 'store', metavar = '[taxon-name]',
+        nargs='+', type = str, help = argparse.SUPPRESS)
+
+    contam.add_argument('--taxon-code', action = 'store', metavar = '[taxon-code]',
+        type = str, help = argparse.SUPPRESS)
+
+    contam.add_argument('--transcripts', action = 'store', help = argparse.SUPPRESS)
+
+    contam.add_argument('--orfs', action = 'store', help = argparse.SUPPRESS)
+
+    contam.add_argument('--db', '-d', action = 'store', metavar = '[Diagnostic Database]',
+        type = str, help = argparse.SUPPRESS)
+
+    contam.add_argument('--gen-code', '-g', action = 'store', default = '1',
+        metavar = '[translation-table]', type = str, help = argparse.SUPPRESS)
+
+    contam.add_argument('--kmer', '-k', action = 'store_true', help = argparse.SUPPRESS)
+
+    contam.add_argument('--phylo', '-p', action = 'store_false', help = argparse.SUPPRESS)
+
+    contam.add_argument('--ref-msa', '-m', action = 'store', metavar = '[diagnostic msas]',
+        type = str, help = argparse.SUPPRESS)
+
+    contam.add_argument('--ref-trees', '-rt', action = 'store', metavar = '[diagnostic trees]',
+        type = str, help = argparse.SUPPRESS)
+
+    contam.add_argument('--threads','-t', action = 'store', default = 4,
+        metavar = '[Threads]', type = int, help = argparse.SUPPRESS)
+
+    contam.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
+
+    contam.add_argument('--quiet', '-q', action = 'store_true', help = argparse.SUPPRESS)
+
+    contam.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
+
+    contam.add_argument('--contam', default = True, help = argparse.SUPPRESS)
+
+    # create the parse for the "msa" sub-command
+    parser_msa = sub_parsers.add_parser('msa', usage = argparse.SUPPRESS, add_help = False,
+                        formatter_class = argparse.RawDescriptionHelpFormatter)
+
+    msa_aln = parser_msa.add_argument_group('General Alignment Options', description = (
+    '''--out-dir (-o)        output directory name\n\n'''
+    '''--msa-dir (-m)        directory of unaligned MSAs\n\n'''
+    '''--prot-dir (-p)       directory of FASTA files of assigned gene families
+                      per taxon\n\n'''
+    '''--gf-list (-g)        list of gene families to align\n\n'''
+    '''--taxon-list          list of taxa to include in MSAs\n\n'''
+    '''--og-delim (-d)       delimiter for gene-family names\n\n'''
+    '''--msa-prog            alignment tool to use (MAFFT or WITCH; default = MAFFT)\n\n'''
+    '''--gap-thresh          gaps threshold for trimming column (0 - 1.0; default = 0.9)\n\n'''
+    '''--clipkit             use clipkit and "smart-gap" for gap removal (default)\n\n'''
+    '''--threads (-t)        number of CPU threads to use (default = 4)\n\n'''
+    '''--clean               remove intermediate files\n\n'''
+    '''--quiet (-q)          no console output\n\n'''
+    '''--gzip (-gz)          tar and gzip TIdeS output\n\n'''
+    '''--figures             for when you want all the stats and figures!\n\n'''
+    '''--help (-h)           show this help message and exit\n'''))
+
+    msa_aln_filt = parser_msa.add_argument_group('General Filtering Options', description = (
+    '''--skip-filter         do not remove any sequences from the MSA\n\n'''
+    '''--skip-size-filter    do not remove sequences if "too short/long"\n'''))
+
+    msa_size_filt = parser_msa.add_argument_group('Size Filtering Options', description = (
+    '''--size-filter-mean    filter sequences based on mean length of the gene-family\n\n'''
+    '''--size-filter-median  filter sequences based on median length of the
+                      gene-family (default)\n\n'''
     '''--min-prop            minimum proportion of the mean/median gene-family
-                      length to keep peptides (default = 0.33)\n'''
+                      length to keep peptides (default = 0.33)\n\n'''
     '''--max-prop            maximum proportion of the mean/median gene-family
-                      length to keep peptides (default = 2.0)\n'''
-    '''--os-guidance         use GUIDANCE2 to identify and remove outlier peptides
-                      from the MSA\n'''
-    '''--os-guidance-bs      number of bootstraps for GUIDANCE2 outlier removal
-                      (default = 10)\n'''
-    '''--os-kmer             use k-mer based NLP+ML approach to identify and
-                      remove outlier sequences\n'''
-    '''--os-kmer-len         size of k-mer to use for k-mer based outlier sequence
-                      removal (default = 5)\n'''
-    '''--os-sim              use "sentence similarity" NLP approach to identify
-                      and remove outlier sequences (default)\n'''
-    '''--os-sim-thresh       threshold (above which) sequences are removed
-                      (from 2 - 10, default = 3)\n'''
-    '''--os-sim-iqr          use interquartile range of sentence similarities as
-                      basis for scoring sequences\n'''
-    '''--os-sim-bs           number of bootstraps for sentence-similarity approach
-                      (default = 100)\n'''
-    '''--os-sim-ns           number of peptides to sub-sample to create distribution
-                      of sentence similarities (default = 100)\n'''
-    '''--lof                 use unsupervised learning (local outlier factor) to infer
-                      outlier peptides (default for k-mer based approaches)\n'''
-    '''--msa-prog            alignment tool to use (MAFFT or WITCH; default = MAFFT)\n'''
-    ))
+                      length to keep peptides (default = 2.0)\n'''))
+
+    msa_hom_filt = parser_msa.add_argument_group('Homology Assessment and Filtering Options', description = (
+    '''--guidance            absolute path to GUIDANCE2 to identify and remove
+                      outlier peptide sequences\n\n'''
+    '''--guidance-bs         number of bootstraps for GUIDANCE2 outlier removal
+                      (default = 10)\n\n'''
+    '''--kmer (-k)           k-mer frequencies and unsupervised learning (local
+                      outlier factor) to infer outlier peptide sequences\n\n'''
+    '''--ngram (-n)          n-gram for outlier sequence removal (default = 5)\n\n'''
+    '''--sim (-s)            "sentence similarity" to identify and remove
+                      outlier peptide sequences\n\n'''
+    '''--sim-thresh          threshold (above which) sequences are removed
+                      (from 2 - 10, default = 3)\n\n'''
+    '''--sim-iqr            interquartile range of "sentence similarities" as
+                      basis for scoring sequences\n\n'''
+    '''--sim-bs             number of bootstraps for "sentence similarity" metrics
+                      (default = 100)\n\n'''
+    '''--sim-ns             number of peptides to sub-sample to create distribution
+                      of "sentence similarities" (default = 100)\n\n'''
+    '''--lof                use unsupervised learning (local outlier factor) to infer
+                     outlier peptides with "sentence similarity"\n\n'''))
+
+    msa_aln.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
+        type = str, help = argparse.SUPPRESS)
 
 
-    mng_aln.add_argument('--only-msa', action = 'store_true', help = argparse.SUPPRESS)
-
-    mng_aln.add_argument('--msa-dir', action = 'store', metavar = '[msa-directory]',
+    msa_aln.add_argument('--msa-dir', '-m', action = 'store', metavar = '[msa-directory]',
                 type = str, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--prot-dir', action = 'store', metavar = '[peptide-directory]',
+    msa_aln.add_argument('--prot-dir', '-p', action = 'store', metavar = '[peptide-directory]',
                 type = str, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--gf-list', action = 'store', metavar = '[gene-family-list]',
+    msa_aln.add_argument('--gf-list', '-g', action = 'store', metavar = '[gene-family-list]',
                 type = str, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--taxon-list', action = 'store', metavar = '[taxon-list]',
+    msa_aln.add_argument('--taxon-list', action = 'store', metavar = '[taxon-list]',
                 type = str, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--no-size-filter', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--og-delim', '-d', action = 'store', metavar = '[og-delimiter]',
+                type = str, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--no-msa-filter', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--msa-prog', action = 'store', metavar = '[msa-program]',
+                type = str, default = 'MAFFT', help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--size-filter-mean', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--gap-thresh', action = 'store', metavar = '[gap-threshold]',
+                type = float, default = 0.9, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--size-filter-median', action = 'store_false', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--clipkit', action = 'store_false', help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--min-prop', action = 'store', default = 0.33,
+    msa_aln.add_argument('--skip-filter', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--skip-size-filter', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--size-filter-mean', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--size-filter-median', action = 'store_false', help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--min-prop', action = 'store', default = 0.33,
                 metavar = '[min-prop-size-filter]', type = float, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--max-prop', action = 'store', default = 2.0,
+    msa_aln.add_argument('--max-prop', action = 'store', default = 2.0,
                 metavar = '[max-prop-size-filter]', type = float, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-guidance', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--guidance', action = 'store_true', help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-guidance-bs', action = 'store', default = 10,
+    msa_aln.add_argument('--guidance-bs', action = 'store', default = 10,
                 metavar = '[guidance2-boot-straps]', type = float, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-kmer', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--kmer', '-k', action = 'store_true', help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-kmer-len', action = 'store', default = 5,
+    msa_aln.add_argument('--ngram','-n', action = 'store', default = 5,
                 metavar = '[filter-kmer-length]', type = float, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-sim', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--sim', action = 'store_true', help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-sim_thresh', action = 'store', default = 3, help = argparse.SUPPRESS)
+    msa_aln.add_argument('--sim-thresh', action = 'store', default = 3, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-sim-iqr', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--sim-iqr', action = 'store_true', help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-sim-bs', action = 'store', default = 100,
+    msa_aln.add_argument('--sim-bs', action = 'store', default = 100,
                 metavar = '[filter-sent-sim-boot-strap]', type = float, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--os-sim-ns', action = 'store', default = 100,
+    msa_aln.add_argument('--sim-ns', action = 'store', default = 100,
                 metavar = '[filter-sent-sim-num-seqs]', type = float, help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--lof', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--lof', action = 'store_true', help = argparse.SUPPRESS)
 
-    mng_aln.add_argument('--msa-prog', action = 'store', metavar = '[msa-program]',
+    msa_aln.add_argument('--threads','-t', action = 'store', default = 4,
+        metavar = '[Threads]', type = int, help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--quiet', '-q', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--figures', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_aln.add_argument('--msa', default = True, help = argparse.SUPPRESS)
+
+
+    # create the parse for the "tree" sub-command
+    parser_tree = sub_parsers.add_parser('tree', help=' phylogenetic tree reconstructions methods')
+    parser_tree.add_argument('--bas', type=str, help='sas are bad asses')
+
+
+    # create the parse for the "msa-tree" sub-command
+    parser_msa_tree = sub_parsers.add_parser('msa-tree', usage = argparse.SUPPRESS, add_help = False,
+                        formatter_class = argparse.RawDescriptionHelpFormatter)
+
+
+    msa_tree = parser_msa_tree.add_argument_group('General MSA-Tree Options', description = (
+    '''--out-dir (-o)        output directory name\n\n'''
+    '''--threads (-t)        number of CPU threads to use (default = 4)\n\n'''
+    '''--clean               remove intermediate files\n\n'''
+    '''--quiet (-q)          no console output\n\n'''
+    '''--gzip (-gz)          tar and gzip TIdeS output\n\n'''
+    '''--figures             for when you want all the stats and figures!\n\n'''
+    '''--help (-h)           show this help message and exit\n'''))
+
+    msa_tree_aln = parser_msa_tree.add_argument_group('General Alignment Options', description = (
+    '''--msa-dir (-m)        directory of unaligned MSAs\n\n'''
+    '''--prot-dir (-p)       directory of FASTA files of assigned gene families
+                      per taxon\n\n'''
+    '''--gf-list (-g)        list of gene families to align\n\n'''
+    '''--taxon-list          list of taxa to include in MSAs\n\n'''
+    '''--og-delim (-d)       delimiter for gene-family names\n\n'''
+    '''--msa-prog            alignment tool to use (MAFFT or WITCH; default = MAFFT)\n\n'''
+    '''--gap-thresh          gaps threshold for trimming column (0 - 1.0; default = 0.9)\n\n'''
+    '''--clipkit             use clipkit and "smart-gap" for gap removal (default)\n\n'''
+    '''--skip-filter         do not remove any sequences from the MSA\n\n'''
+    '''--skip-size-filter    do not remove sequences if "too short/long"\n'''))
+
+    msa_tree_size_filt = parser_msa_tree.add_argument_group('Size Filtering Options', description = (
+    '''--size-filter-mean    filter sequences based on mean length of the gene-family\n\n'''
+    '''--size-filter-median  filter sequences based on median length of the
+                      gene-family (default)\n\n'''
+    '''--min-prop            minimum proportion of the mean/median gene-family
+                      length to keep peptides (default = 0.33)\n\n'''
+    '''--max-prop            maximum proportion of the mean/median gene-family
+                      length to keep peptides (default = 2.0)\n'''))
+
+    msa_tree_hom_filt = parser_msa_tree.add_argument_group('Homology Assessment and Filtering Options', description = (
+    '''--guidance            absolute path to GUIDANCE2 to identify and remove
+                      outlier peptide sequences\n\n'''
+    '''--guidance-bs         number of bootstraps for GUIDANCE2 outlier removal
+                      (default = 10)\n\n'''
+    '''--kmer (-k)           k-mer frequencies and unsupervised learning (local
+                      outlier factor) to infer outlier peptide sequences\n\n'''
+    '''--ngram (-n)          n-gram for outlier sequence removal (default = 5)\n\n'''
+    '''--sim (-s)            "sentence similarity" to identify and remove
+                      outlier peptide sequences\n\n'''
+    '''--sim-thresh          threshold (above which) sequences are removed
+                      (from 2 - 10, default = 3)\n\n'''
+    '''--sim-iqr            interquartile range of "sentence similarities" as
+                      basis for scoring sequences\n\n'''
+    '''--sim-bs             number of bootstraps for "sentence similarity" metrics
+                      (default = 100)\n\n'''
+    '''--sim-ns             number of peptides to sub-sample to create distribution
+                      of "sentence similarities" (default = 100)\n\n'''
+    '''--lof                use unsupervised learning (local outlier factor) to infer
+                     outlier peptides with "sentence similarity"\n\n'''))
+
+    msa_tree_phy = parser_msa_tree.add_argument_group('General Phylogenetic Reconstruction Options', description = (
+    '''--very-fast-tree      phylogenetic tree construction with VeryFastTree\n\n'''
+    '''--iqtree              phylogenetic tree construction with IQTree2 (default)\n\n'''
+    '''--model               specify evolutionary model for phylogenetic tree reconstruction
+                      (LG+G, JTT, WAG, etc)\n\n'''
+    '''--ufb, -B             number of ultrafast bootstraps
+                      (default = 1000)\n\n'''
+    '''--alrt                UPDATE\n\n'''
+    '''--asteroid            species-tree construction with ASTEROID\n\n'''
+    '''--aster               species-tree construction with ASTER\n\n'''))
+
+    msa_tree.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--msa-dir', '-m', action = 'store', metavar = '[msa-directory]',
+                type = str, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--prot-dir', '-p', action = 'store', metavar = '[peptide-directory]',
+                type = str, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--gf-list', '-g', action = 'store', metavar = '[gene-family-list]',
+                type = str, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--taxon-list', action = 'store', metavar = '[taxon-list]',
+                type = str, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--og-delim', '-d', action = 'store', metavar = '[og-delimiter]',
+                type = str, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--msa-prog', action = 'store', metavar = '[msa-program]',
                 type = str, default = 'MAFFT', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--gap-thresh', action = 'store', metavar = '[gap-threshold]',
+                type = float, default = 0.9, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--clipkit', action = 'store_false', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--skip-filter', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--skip-size-filter', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--size-filter-mean', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--size-filter-median', action = 'store_false', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--min-prop', action = 'store', default = 0.33,
+                metavar = '[min-prop-size-filter]', type = float, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--max-prop', action = 'store', default = 2.0,
+                metavar = '[max-prop-size-filter]', type = float, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--guidance', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--guidance-bs', action = 'store', default = 10,
+                metavar = '[guidance2-boot-straps]', type = float, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--kmer', '-k', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--ngram','-n', action = 'store', default = 5,
+                metavar = '[filter-kmer-length]', type = float, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--sim', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--sim-thresh', action = 'store', default = 3, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--sim-iqr', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--sim-bs', action = 'store', default = 100,
+                metavar = '[filter-sent-sim-boot-strap]', type = float, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--sim-ns', action = 'store', default = 100,
+                metavar = '[filter-sent-sim-num-seqs]', type = float, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--lof', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--threads','-t', action = 'store', default = 4,
+        metavar = '[Threads]', type = int, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--quiet', '-q', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--figures', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--model', action = 'store', default = None,
+        metavar = '[model]', type = str, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--ufb', '-B', action = 'store', default = 1000,
+        metavar = '[ultrafast bootstrap]', type = int, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--alrt', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--asteroid', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--aster', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--very-fast-tree', action = 'store_true', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--iqtree', action = 'store_false', help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--msa-tree', default = True, help = argparse.SUPPRESS)
+
 
     args = parser.parse_args()
 
-    if args.refseq == True:
-        args.genbank = True
+    print(args)
 
-    args.blast_based = True
+def check_add_taxa_args(args):
+    pass
 
-    if args.db and args.db.endswith('.hmm'):
-        args.blast_based = False
+def check_contam_args(args):
+    pass
 
+def check_msa_args(args):
+    pass
 
-    if len(sys.argv[1:]) == 0:
-        print('Custom message coming!')
-        # print(ascii_logo_vsn())
-        # print(detail_msg())
-        # print(f'{usage_msg()}\n')
-        sys.exit()
+def check_tree_args(args):
+    pass
 
-    return args
-
+def check_msa_tree_args(args):
+    pass
 
 if __name__ == '__main__':
-    print(collect_args())
+    capture_args()
