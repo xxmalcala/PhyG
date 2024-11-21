@@ -6,23 +6,11 @@ from collections import defaultdict
 
 from pathlib import Path
 
-# from bin import largest_isoform as liso
-from bin import phyg_orf_related as oc
+import phyg_orf_related as oc
 
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
-
-
-"""
-notes to self:
-
-if given ORFs from WGS file (from GenBank/RefSeq), must extract the accession codes and can
-ignore the minimum length requirements
-
-Similarly, if given a file of ORFs, no need to manipulate the sequences inside...
--- just add the taxon_name and delimiter IF the seq-id doesn't start with taxon_name
-"""
 
 def assess_seq_info(seq_description: str) -> list:
     """
@@ -199,10 +187,12 @@ def eval_wgs_genbank(
 
     if remove_isoforms:
         isoforms_to_keep = save_isoforms(fasta_file, True, prokaryotic)
+
         if not isoforms_to_keep:
             print('ERROR: Unable to identify NCBI loci and remove redundant isoforms'
             f' in {fasta_file.rpartition("/")[-1]}. Please ensure that this file was sourced'
             ' from GenBank/RefSeq.')
+
             print("If this warning persists, please open an issue on PhyG's GitHub page.")
             sys.exit(1)
 
@@ -213,10 +203,12 @@ def eval_wgs_genbank(
         seq_name = f'{taxon_name}{delim}{i.id}'
         if taxon_code:
             seq_name = f'{taxon_code}{delim}{seq_name}'
+
         name_conversion[i.id] = seq_name
         i.id = seq_name
         i.description = ''
         i.name = ''
+
         final_seqs.append(i)
 
     SeqIO.write(final_seqs, f'{final_filt_fas}.NTD.fasta', 'fasta')
@@ -235,8 +227,7 @@ def eval_wgs_non_gbk(
         fasta_file: str,
         taxon_code: str,
         prokaryotic: bool = False,
-        delim: str = '|'
-        ) -> str:
+        delim: str = '|') -> str:
 
     Path(out_dir).mkdir(exist_ok = True, parents = True)
 
@@ -437,6 +428,7 @@ def collapse_isoforms(
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,
                             universal_newlines=True)
+
     return cdhit_out_fasta
 
 
@@ -456,7 +448,7 @@ def orf_calling(
             min_qry_cover: int = 0,
             blast_based: bool = True,
             top_hits_only: bool = False,
-            prots: bool = False) -> str:
+            prots: bool = False) -> list:
 
 
     Path(out_dir).mkdir(exist_ok = True, parents = True)
@@ -491,7 +483,7 @@ def prep_transcriptomes(
         taxon_code: str = None,
         orf_db: str = None,
         delim: str = '|',
-        og_delim: str = 'OG6',
+        og_delim: str = '|',
         min_len: int = 200,
         gen_code: str = '1',
         evalue: float = 1e-10,
@@ -501,7 +493,7 @@ def prep_transcriptomes(
         min_qry_cover: int = 0,
         top_hits_only: bool = False,
         blast_based: bool = True,
-        threads: int = 4):
+        threads: int = 4) -> None:
 
     out_dir_bu = f'{taxon_dir}/Original/'
     out_dir_ss = f'{taxon_dir}/Filter_Steps/Length_Filter/'
@@ -516,23 +508,20 @@ def prep_transcriptomes(
 
     back_up_file(
         out_dir_bu,
-        fasta_file
-        )
+        fasta_file)
 
     sfilt_fasta = remove_short_seqs(
                     out_dir_ss,
                     taxon_name,
                     taxon_code,
-                    fasta_file
-                    )
+                    fasta_file)
 
     rrfilt_fasta = remove_rRNA(
                         out_dir_rr,
                         tax,
                         sfilt_fasta,
                         min_len,
-                        threads
-                        )
+                        threads)
 
     init_og_fasta, og_hit_tsv = orf_calling(
                                     out_dir_oc,
@@ -549,29 +538,24 @@ def prep_transcriptomes(
                                     min_hit_cover,
                                     min_qry_cover,
                                     blast_based,
-                                    top_hits_only
-                                    )
+                                    top_hits_only)
 
     final_og_ntd_fasta = collapse_isoforms(
                             out_dir_of,
                             init_og_fasta,
-                            threads = threads
-                            )
+                            threads = threads)
 
     final_og_aa_fasta = oc.translate_orfs(
                             final_og_ntd_fasta,
-                            gen_code
-                            )
+                            gen_code)
 
     back_up_file(
         taxon_dir,
-        final_og_ntd_fasta
-        )
+        final_og_ntd_fasta)
 
     back_up_file(
         taxon_dir,
-        final_og_aa_fasta
-        )
+        final_og_aa_fasta)
 
 
 def prep_wgs(
@@ -581,7 +565,7 @@ def prep_wgs(
         taxon_code: str = None,
         orf_db: str = None,
         delim: str = '|',
-        og_delim: str = 'OG6',
+        og_delim: str = '|',
         gen_code: str = '1',
         evalue: float = 1e-10,
         min_id: int = 0,
@@ -593,7 +577,7 @@ def prep_wgs(
         genbank: bool = True,
         prokaryotic: bool = False,
         remove_isoforms: bool = True,
-        threads: int = 4):
+        threads: int = 4) -> None:
 
     out_dir_bu = f'{taxon_dir}/Original/'
     out_dir_oc = f'{taxon_dir}/OG_Calling/'
@@ -605,8 +589,7 @@ def prep_wgs(
 
     back_up_file(
         out_dir_bu,
-        fasta_file
-        )
+        fasta_file)
 
     if genbank:
         orf_fasta = eval_wgs_genbank(
@@ -616,8 +599,7 @@ def prep_wgs(
                         taxon_code,
                         prokaryotic,
                         remove_isoforms,
-                        delim
-                        )
+                        delim)
 
     else:
         orf_fasta = eval_wgs_non_gbk(
@@ -626,13 +608,11 @@ def prep_wgs(
                         fasta_file,
                         taxon_code,
                         prokaryotic,
-                        delim
-                        )
+                        delim)
 
     peptide_fasta = oc.translate_orfs(
                     orf_fasta,
-                    gen_code
-                    )
+                    gen_code)
 
     og_fasta, og_hit_tsv = orf_calling(
                                 out_dir_oc,
@@ -650,8 +630,7 @@ def prep_wgs(
                                 min_qry_cover,
                                 blast_based,
                                 top_hits_only,
-                                True
-                                )
+                                True)
 
     og_ntd_seqs = []
     og_pep_seqs = {i.id.rpartition(delim)[0]:i.id for i in SeqIO.parse(og_fasta,'fasta')}
@@ -666,64 +645,8 @@ def prep_wgs(
 
     back_up_file(
         taxon_dir,
-        og_fasta
-        )
+        og_fasta)
 
     back_up_file(
         taxon_dir,
-        og_fasta.replace(".AA.fasta",".NTD.fasta")
-        )
-
-
-if __name__ == '__main__':
-    try:
-        fasta_file = sys.argv[1]
-        taxon_name = sys.argv[2]
-        orf_db = sys.argv[3]
-    except:
-        print('Usage:\n    python3 phyg_add_taxa.py [FASTA-FILE] [TAXON-NAME/CODE] [ORF-DATABASE]')
-        sys.exit(1)
-
-    taxon_code = None # 'Sr_ci_Samb'
-
-    taxon_dir = f'{taxon_name}_PhyG'
-
-    if taxon_code:
-        taxon_dir = taxon_dir.replace(taxon_name, taxon_code)
-
-    transcriptome = True
-    wgs = False
-
-    codes = {'Furgasonia':'6','Nassula': '6', 'Mesodinium': '29'}
-    gcode = '1'
-
-    if taxon_name.split("_")[0] in codes:
-        gcode = codes[taxon_name.split("_")[0]]
-
-    if transcriptome:
-        prep_transcriptomes(
-                fasta_file,
-                taxon_dir,
-                taxon_name,
-                taxon_code,
-                orf_db,
-                og_delim = '|',
-                gen_code = gcode,
-                threads = 26
-                )
-
-    elif wgs:
-        genbank = True
-        remove_isoforms = True
-        prokaryotic = True
-        prep_wgs(
-            fasta_file,
-            taxon_dir,
-            taxon_name,
-            taxon_code,
-            orf_db,
-            genbank = genbank,
-            prokaryotic = prokaryotic,
-            remove_isoforms = remove_isoforms,
-            threads = 26
-            )
+        og_fasta.replace(".AA.fasta",".NTD.fasta"))
