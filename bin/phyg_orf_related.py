@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-import subprocess
+import subprocess, time
 
 from collections import defaultdict
+from datetime import datetime, timedelta
 
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
@@ -207,23 +208,28 @@ def finalize_orfs(
 
 
 def orf_call_diamond(
-            out_dir: str,
-            fasta_file: str,
-            taxon_name: str,
-            diamond_db: str,
-            delim: str = '|',
-            og_delim: str = '|',
-            gen_code: str = '1',
-            threads: int = 4,
-            evalue: float = 1e-10,
-            min_id: int = 0,
-            max_hits: int = 1,
-            min_hit_cover: int = 60,
-            min_qry_cover: int = 0,
-            top_hsp_only: bool = False,
-            prots = False) -> str:
+        start_time,
+        out_dir: str,
+        fasta_file: str,
+        taxon_name: str,
+        diamond_db: str,
+        delim: str = '|',
+        og_delim: str = '|',
+        gen_code: str = '1',
+        threads: int = 4,
+        evalue: float = 1e-10,
+        min_id: int = 0,
+        max_hits: int = 1,
+        min_hit_cover: int = 60,
+        min_qry_cover: int = 0,
+        top_hsp_only: bool = False,
+        prots: bool = False,
+        verbose: bool = False) -> str:
 
     out_tsv = f'{taxon_name}.DIAMOND_Hits.tsv'
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Assigning Gene-Families')
 
     dmnd_tsv = diamond_og_assign(
                     out_dir,
@@ -236,18 +242,22 @@ def orf_call_diamond(
                     max_hits,
                     min_hit_cover,
                     min_qry_cover,
-                    prots
-                    )
+                    prots)
 
     if not prots:
+        if verbose:
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Extracting ORFs')
+
         orf_dict = extract_orf(
                         dmnd_tsv,
                         fasta_file,
-                        og_delim
-                        )
+                        og_delim)
 
         if delim == og_delim:
             delim = ''
+
+        if verbose:
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Finalizing Initial ORFs')
 
         out_ntds = finalize_orfs(
                     out_dir,
@@ -255,8 +265,7 @@ def orf_call_diamond(
                     taxon_name,
                     delim,
                     top_hsp_only,
-                    prots
-                    )
+                    prots)
 
         return out_ntds, dmnd_tsv
 
@@ -266,11 +275,13 @@ def orf_call_diamond(
                         fasta_file,
                         og_delim,
                         False,
-                        True
-                        )
+                        True)
 
         if delim == og_delim:
             delim = ''
+
+        if verbose:
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Finalizing Assignments')
 
         out_peps = finalize_orfs(
                     out_dir,
@@ -278,7 +289,6 @@ def orf_call_diamond(
                     taxon_name,
                     delim,
                     top_hsp_only,
-                    True
-                    )
+                    True)
 
         return out_peps, dmnd_tsv

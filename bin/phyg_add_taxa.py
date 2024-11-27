@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
-import logging, shutil, subprocess, sys
+import logging, shutil, subprocess, sys, time
 
+from datetime import datetime, timedelta
 from collections import defaultdict
 
 from pathlib import Path
 
-import phyg_orf_related as oc
+# from bin import... MAKE SURE TO ADD THIS AFTER FINISHED TESTING!!!
+from bin import phyg_orf_related as oc
 
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
@@ -77,8 +79,10 @@ def check_complete_seq(
 
 
 def capture_isoforms(
+        start_time,
         fasta_file: str,
-        prok: bool = False) -> dict:
+        prok: bool = False,
+        verbose: bool = False) -> dict:
     """
     Captures isoforms for each locus from a GenBank-sourced FASTA file of CDSs
 
@@ -110,15 +114,18 @@ def capture_isoforms(
             elif prot_info:
                 iso_dict[loc_info].append((prot_info, qseq))
 
-    print(f'Found {s} CDSs, {cs} are complete, from {len(iso_dict)} unique loci')
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Found {s} CDSs, {cs} are complete, from {len(iso_dict)} unique loci')
 
     return iso_dict
 
 
 def save_isoforms(
+        start_time,
         fasta_file: str,
         longest_isoform: bool = True,
-        prok: bool = False) -> list:
+        prok: bool = False,
+        verbose: bool = False) -> list:
     """
     Keep the most useful isoforms based on user preference (either all of them, or the
     longest isoform for a given locus)
@@ -136,9 +143,11 @@ def save_isoforms(
 
     all_isoforms = []
 
-    iso_dict = capture_isoforms(fasta_file, prok)
-
-
+    iso_dict = capture_isoforms(
+                start_time,
+                fasta_file,
+                prok,
+                verbose)
 
     for k, v in iso_dict.items():
         if longest_isoform:
@@ -152,8 +161,6 @@ def save_isoforms(
     return all_isoforms
 
 
-
-
 def back_up_file(
         out_dir: str,
         fasta_file: str) -> None:
@@ -164,13 +171,15 @@ def back_up_file(
 
 
 def eval_wgs_genbank(
+        start_time,
         out_dir: str,
         taxon_name: str,
         fasta_file: str,
         taxon_code: str = None,
         prokaryotic: bool = False,
         remove_isoforms: bool = True,
-        delim: str = '|') -> str:
+        delim: str = '|',
+        verbose: bool = False) -> str:
 
     Path(out_dir).mkdir(exist_ok = True, parents = True)
 
@@ -186,7 +195,12 @@ def eval_wgs_genbank(
     name_conversion = {}
 
     if remove_isoforms:
-        isoforms_to_keep = save_isoforms(fasta_file, True, prokaryotic)
+        isoforms_to_keep = save_isoforms(
+                            start_time,
+                            fasta_file,
+                            True,
+                            prokaryotic,
+                            verbose)
 
         if not isoforms_to_keep:
             print('ERROR: Unable to identify NCBI loci and remove redundant isoforms'
@@ -197,7 +211,12 @@ def eval_wgs_genbank(
             sys.exit(1)
 
     else:
-        isoforms_to_keep = save_isoforms(fasta_file, False, prokaryotic)
+        isoforms_to_keep = save_isoforms(
+                                start_time,
+                                fasta_file,
+                                False,
+                                prokaryotic,
+                                verbose)
 
     for i in isoforms_to_keep:
         seq_name = f'{taxon_name}{delim}{i.id}'
@@ -282,7 +301,6 @@ def remove_short_seqs(
     fasta_file:  FASTA formatted file
     min_len:     minimum ORF length to consider [default is 200nt]
     delimiter:   string to separate portions of the sequence name [default is "|"]
-    transcript:
 
     Returns
     ----------
@@ -376,7 +394,7 @@ def remove_rRNA(
     Parameters
     ----------
     out_dir:     output directory to store filtered data
-    taxon_name:  species/taxon name or abbreviated code
+    taxon_name:  taxon/sample name or abbreviated code
     fasta_file:  FASTA formatted file
     min_len:     minimum ORF length to consider [default is 300nt]
     threads:     number of cpu threads to use
@@ -433,28 +451,31 @@ def collapse_isoforms(
 
 
 def orf_calling(
-            out_dir: str,
-            taxon_name: str,
-            fasta_file: str,
-            diamond_db: str,
-            delim: str = '|',
-            og_delim: str = '|',
-            gen_code: str = '1',
-            threads: int = 4,
-            evalue: float = 1e-10,
-            min_id: int = 0,
-            max_hits: int = 1,
-            min_hit_cover: int = 60,
-            min_qry_cover: int = 0,
-            blast_based: bool = True,
-            top_hits_only: bool = False,
-            prots: bool = False) -> list:
+        start_time,
+        out_dir: str,
+        taxon_name: str,
+        fasta_file: str,
+        diamond_db: str,
+        delim: str = '|',
+        og_delim: str = '|',
+        gen_code: str = '1',
+        threads: int = 4,
+        evalue: float = 1e-10,
+        min_id: int = 0,
+        max_hits: int = 1,
+        min_hit_cover: int = 60,
+        min_qry_cover: int = 0,
+        blast_based: bool = True,
+        top_hits_only: bool = False,
+        prots: bool = False,
+        verbose: bool = False) -> list:
 
 
     Path(out_dir).mkdir(exist_ok = True, parents = True)
 
     if blast_based:
         orf_call_fasta, og_hit_tsv = oc.orf_call_diamond(
+                                            start_time,
                                             out_dir,
                                             fasta_file,
                                             taxon_name,
@@ -469,14 +490,17 @@ def orf_calling(
                                             min_hit_cover,
                                             min_qry_cover,
                                             top_hits_only,
-                                            prots)
+                                            prots,
+                                            verbose)
 
         return orf_call_fasta, og_hit_tsv
+
     else:
         pass
 
 
 def prep_transcriptomes(
+        start_time,
         fasta_file: str,
         taxon_dir: str,
         taxon_name: str,
@@ -493,7 +517,8 @@ def prep_transcriptomes(
         min_qry_cover: int = 0,
         top_hits_only: bool = False,
         blast_based: bool = True,
-        threads: int = 4) -> None:
+        threads: int = 4,
+        verbose: bool = False) -> None:
 
     out_dir_bu = f'{taxon_dir}/Original/'
     out_dir_ss = f'{taxon_dir}/Filter_Steps/Length_Filter/'
@@ -506,15 +531,25 @@ def prep_transcriptomes(
     if taxon_code:
         tax = taxon_code
 
+    if verbose:
+        print('\n#------ Preparing Transcriptome Data -------#')
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Backing Up Data for {tax}')
+
     back_up_file(
         out_dir_bu,
         fasta_file)
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Removing short transcripts')
 
     sfilt_fasta = remove_short_seqs(
                     out_dir_ss,
                     taxon_name,
                     taxon_code,
                     fasta_file)
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Removing rRNA contamination')
 
     rrfilt_fasta = remove_rRNA(
                         out_dir_rr,
@@ -523,7 +558,11 @@ def prep_transcriptomes(
                         min_len,
                         threads)
 
+    if verbose:
+        print('\n#------ OG Assignment and ORF Calling ------#')
+
     init_og_fasta, og_hit_tsv = orf_calling(
+                                    start_time,
                                     out_dir_oc,
                                     tax,
                                     rrfilt_fasta,
@@ -538,16 +577,26 @@ def prep_transcriptomes(
                                     min_hit_cover,
                                     min_qry_cover,
                                     blast_based,
-                                    top_hits_only)
+                                    top_hits_only,
+                                    verbose = verbose)
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Filtering Redundant ORFs')
 
     final_og_ntd_fasta = collapse_isoforms(
                             out_dir_of,
                             init_og_fasta,
                             threads = threads)
 
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Translating ORFs')
+
     final_og_aa_fasta = oc.translate_orfs(
                             final_og_ntd_fasta,
                             gen_code)
+
+    if verbose:
+        print('\n#--------- Backing Up Prepared ORFs --------#')
 
     back_up_file(
         taxon_dir,
@@ -557,8 +606,11 @@ def prep_transcriptomes(
         taxon_dir,
         final_og_aa_fasta)
 
+    print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Back Up Finished')
+
 
 def prep_wgs(
+        start_time,
         fasta_file: str,
         taxon_dir: str,
         taxon_name: str,
@@ -577,7 +629,9 @@ def prep_wgs(
         genbank: bool = True,
         prokaryotic: bool = False,
         remove_isoforms: bool = True,
-        threads: int = 4) -> None:
+        threads: int = 4,
+        verbose: bool = False) -> None:
+
 
     out_dir_bu = f'{taxon_dir}/Original/'
     out_dir_oc = f'{taxon_dir}/OG_Calling/'
@@ -587,19 +641,32 @@ def prep_wgs(
     if taxon_code:
         tax = taxon_code
 
+    if verbose:
+        print('\n#----- Preparing Annotated Genome Data -----#')
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Backing Up Data for {tax}')
+
+
     back_up_file(
         out_dir_bu,
         fasta_file)
 
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Preparing CDSs')
+
     if genbank:
+        if verbose and remove_isoforms:
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Extracting Longest Isoforms')
+
         orf_fasta = eval_wgs_genbank(
+                        start_time,
                         out_dir_bu,
                         taxon_name,
                         fasta_file,
                         taxon_code,
                         prokaryotic,
                         remove_isoforms,
-                        delim)
+                        delim,
+                        verbose)
 
     else:
         orf_fasta = eval_wgs_non_gbk(
@@ -610,11 +677,18 @@ def prep_wgs(
                         prokaryotic,
                         delim)
 
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Translating CDSs')
+
     peptide_fasta = oc.translate_orfs(
                     orf_fasta,
                     gen_code)
 
+    if verbose:
+        print('\n#------ OG Assignment and ORF Calling ------#')
+
     og_fasta, og_hit_tsv = orf_calling(
+                                start_time,
                                 out_dir_oc,
                                 tax,
                                 peptide_fasta,
@@ -630,10 +704,12 @@ def prep_wgs(
                                 min_qry_cover,
                                 blast_based,
                                 top_hits_only,
-                                True)
+                                True,
+                                verbose)
 
     og_ntd_seqs = []
     og_pep_seqs = {i.id.rpartition(delim)[0]:i.id for i in SeqIO.parse(og_fasta,'fasta')}
+
     for i in SeqIO.parse(orf_fasta, 'fasta'):
         if i.id in og_pep_seqs:
             i.id = og_pep_seqs[i.id]
@@ -643,6 +719,9 @@ def prep_wgs(
 
     SeqIO.write(og_ntd_seqs, og_fasta.replace(".AA.fasta",".NTD.fasta"),'fasta')
 
+    if verbose:
+        print('\n#-------- Backing Up Finalized Data --------#')
+
     back_up_file(
         taxon_dir,
         og_fasta)
@@ -650,3 +729,87 @@ def prep_wgs(
     back_up_file(
         taxon_dir,
         og_fasta.replace(".AA.fasta",".NTD.fasta"))
+
+
+def guess_data_type(
+        start_time,
+        fasta_file: str,
+        taxon_dir: str,
+        taxon_name: str,
+        taxon_code: str = None,
+        gen_code: str = '1',
+        verbose = False) -> bool:
+    """
+    Guess the data-type based on frequency of in-frame stop codons.
+
+    Parameters
+    ----------
+    fasta_file:  FASTA formatted file
+    taxon_dir:   Ouput direcotry to store data
+    taxon_name:  taxon/sample name
+    taxon_code:  abbreviated taxon/sample code
+    gen_code:    ncbi translation table (determines stop codons)
+
+    Returns
+    ----------
+    likely_transcripts:  whether the data are likely transcripts or ORFs
+    """
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Evaluating data type ' \
+            '(transcripts or CDSs) by in-frame stop codon frequency')
+
+    out_dir_bu = f'{taxon_dir}/Original/'
+
+    likely_transcripts = False
+
+    tax = taxon_name
+
+    if taxon_code:
+        tax = taxon_code
+
+    out_tsv = f'{out_dir_bu}{tax}.InFrame_Stop_Codons.tsv'
+
+    back_up_file(
+        out_dir_bu,
+        fasta_file)
+
+    stop_dict = {'1':['TGA','TAA','TAG', 'Total'], '4':['TAA','TAG', 'Total'],
+        '6':['TGA', 'Total'], '10':['TAA','TAG', 'Total'], '25':['TAA','TAG', 'Total'],
+        '29':['TGA', 'Total'], '30':['TGA', 'Total']}
+
+    try:
+        stop_codons = {i:0 for i in stop_dict[gen_code]}
+
+    except KeyError:
+        stop_codons = {i:0 for i in stop_dict['1']}
+
+    stop_keys = list(stop_codons.keys())[:-1]
+
+    for i in SeqIO.parse(fasta_file,'fasta'):
+        for n in range(0, len(i) - 3, 3):
+            codon = f'{i.seq[n:n+3]}'
+            stop_codons['Total'] += 1
+            if codon in stop_codons:
+                stop_codons[codon] += 1
+
+    for i in stop_keys:
+        stop_freq = stop_codons[i]/(stop_codons['Total'] * 0.001)
+        stop_codons[f'{i}_Norm'] = f'{stop_freq: .3f}'
+        if float(stop_codons[f'{i}_Norm']) >= 1.5:
+            likely_transcripts = True
+
+    with open(out_tsv,'w+') as w:
+        w.write('Stop_Codon\tCounts\tTotal_Codons\tFrequency_per_1k_Codons\n')
+        for i in stop_keys:
+            stop_norm = f'{i}_Norm'
+            w.write(f'{i}\t{stop_codons[i]}\t{stop_codons["Total"]}\t{stop_codons[stop_norm]}\n')
+
+    if verbose:
+        if likely_transcripts:
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Data type: likely transcripts')
+
+        else:
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Data type: likely CDSs')
+
+    return likely_transcripts

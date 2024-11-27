@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 
-import argparse
+import argparse, sys
 
 def capture_args():
     # create the top-level parser
@@ -22,7 +22,8 @@ def capture_args():
     '''msa             multi-sequence alignment methods\n\n'''
     '''tree            phylogenetic tree reconstructions methods\n\n'''
     '''msa-tree        multi-sequence alignment and
-                single-gene tree reconstructions\n\n'''), help = argparse.SUPPRESS)
+                single-gene tree reconstructions\n\n'''),
+    help = argparse.SUPPRESS, dest = 'command')
 
     # create the parser for the "add-taxa" sub-command
     parser_add_taxa = sub_parsers.add_parser('add-taxa', usage = argparse.SUPPRESS, add_help = False,
@@ -32,7 +33,7 @@ def capture_args():
     '''--in (-i)             input FASTA file\n\n'''
     '''--out-dir (-o)        output directory name\n\n'''
     '''--taxon-name          taxon name (genus species)\n\n'''
-    '''--taxon-code          additional taxonomic code include\n\n'''
+    '''--taxon-code          additional taxonomic code included\n\n'''
     '''--transcripts         FASTA file includes transcripts\n\n'''
     '''--orfs                FASTA file includes CDS/ORFs\n\n'''
     '''--db (-d)             gene-family database (FASTA, DIAMOND, or HMMer format)\n\n'''
@@ -69,7 +70,7 @@ def capture_args():
 
     add_taxa.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
 
-    add_taxa.add_argument('--in', '-i', action = 'store', metavar = '[FASTA-file]',
+    add_taxa.add_argument('--input', '--in', '-i', action = 'store', metavar = '[FASTA-file]',
         type = str, help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
@@ -81,9 +82,9 @@ def capture_args():
     add_taxa.add_argument('--taxon-code', action = 'store', metavar = '[taxon-code]',
         type = str, help = argparse.SUPPRESS)
 
-    add_taxa.add_argument('--transcripts', action = 'store', help = argparse.SUPPRESS)
+    add_taxa.add_argument('--transcripts', action = 'store_true', help = argparse.SUPPRESS)
 
-    add_taxa.add_argument('--orfs', action = 'store', help = argparse.SUPPRESS)
+    add_taxa.add_argument('--orfs', action = 'store_true', help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--genbank', action = 'store_true', help = argparse.SUPPRESS)
 
@@ -128,11 +129,10 @@ def capture_args():
 
     add_taxa.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
 
-    add_taxa.add_argument('--quiet','-q', action = 'store_true', help = argparse.SUPPRESS)
+    add_taxa.add_argument('--quiet', '-q', action = 'store_false', help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--gzip','-gz', action = 'store_true', help = argparse.SUPPRESS)
 
-    add_taxa.add_argument('--add_taxa', default = True, help = argparse.SUPPRESS)
 
     # create the parser for the "contamination" sub-command
     parser_contam = sub_parsers.add_parser('contam', usage = argparse.SUPPRESS, add_help = False,
@@ -142,13 +142,15 @@ def capture_args():
     '''--in (-i)             input FASTA file\n\n'''
     '''--out-dir (-o)        output directory name\n\n'''
     '''--taxon-name          taxon name (genus species)\n\n'''
-    '''--taxon-code          additional taxonomic code include\n\n'''
+    '''--taxon-code          additional taxonomic code included\n\n'''
     '''--transcripts         FASTA file includes transcripts\n\n'''
     '''--orfs                FASTA file includes predicted CDS/ORFs\n\n'''
+    '''--genbank             use if data are CDSs from GenBank or RefSeq\n'''
+    '''--refseq              use if data are CDSs from GenBank or RefSeq\n'''
     '''--db (-d)             diagnostic gene-family database\n\n'''
     '''--gen-code (-g)       translation table to use to translate ORFs (default = 1)\n\n'''
-    '''--kmer (-k)           k-mer based clustering\n\n'''
-    '''--phylo (-p)          phylogenetic based evaluation (default)\n\n'''
+    '''--kmer (-k)           k-mer based clustering (default)\n\n'''
+    '''--phylo (-p)          phylogenetic based evaluation\n\n'''
     '''--threads (-t)        number of CPU threads to use (default = 4)\n\n'''
     '''--clean               remove intermediate files\n\n'''
     '''--quiet (-q)          no console output\n\n'''
@@ -156,7 +158,9 @@ def capture_args():
     '''--help (-h)           show this help message and exit\n'''))
 
     contam_kmer = parser_contam.add_argument_group('K-mer Based Options', description = (
-    '''Options to come?!     \n'''))
+    '''--cluster-threshold   distance threshold for calling clusters (default = 3)\n\n'''
+    '''--eval-threshold      representative proportion of a clade [e.g. Rhizaria'] to
+                      assign a clade-name to a cluster (default = 0.6)\n\n'''))
 
     contam_phylo = parser_contam.add_argument_group('Phylogenetic Tree Based Options', description = (
     '''--ref-msa (-m)            diagnostic mutli-sequence alignments\n\n'''
@@ -164,7 +168,7 @@ def capture_args():
 
     contam.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
 
-    contam.add_argument('--in', '-i', action = 'store', metavar = '[FASTA-file]',
+    contam.add_argument('--input', '--in', '-i', action = 'store', metavar = '[FASTA-file]',
         type = str, help = argparse.SUPPRESS)
 
     contam.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
@@ -176,9 +180,13 @@ def capture_args():
     contam.add_argument('--taxon-code', action = 'store', metavar = '[taxon-code]',
         type = str, help = argparse.SUPPRESS)
 
-    contam.add_argument('--transcripts', action = 'store', help = argparse.SUPPRESS)
+    contam.add_argument('--transcripts', action = 'store_true', help = argparse.SUPPRESS)
 
-    contam.add_argument('--orfs', action = 'store', help = argparse.SUPPRESS)
+    contam.add_argument('--orfs', action = 'store_true', help = argparse.SUPPRESS)
+
+    contam.add_argument('--genbank', action = 'store_true', help = argparse.SUPPRESS)
+
+    contam.add_argument('--refseq', action = 'store_true', help = argparse.SUPPRESS)
 
     contam.add_argument('--db', '-d', action = 'store', metavar = '[Diagnostic Database]',
         type = str, help = argparse.SUPPRESS)
@@ -186,9 +194,15 @@ def capture_args():
     contam.add_argument('--gen-code', '-g', action = 'store', default = '1',
         metavar = '[translation-table]', type = str, help = argparse.SUPPRESS)
 
-    contam.add_argument('--kmer', '-k', action = 'store_true', help = argparse.SUPPRESS)
+    contam.add_argument('--kmer', '-k', action = 'store_false', help = argparse.SUPPRESS)
 
-    contam.add_argument('--phylo', '-p', action = 'store_false', help = argparse.SUPPRESS)
+    contam.add_argument('--cluster-threshold', action = 'store', default = 3,
+        metavar = '[cluster-thresh]', type = int, help = argparse.SUPPRESS)
+
+    contam.add_argument('--eval-threshold', action = 'store', default = 0.6,
+        metavar = '[eval-thresh]', type = int, help = argparse.SUPPRESS)
+
+    contam.add_argument('--phylo', '-p', action = 'store_true', help = argparse.SUPPRESS)
 
     contam.add_argument('--ref-msa', '-m', action = 'store', metavar = '[diagnostic msas]',
         type = str, help = argparse.SUPPRESS)
@@ -196,16 +210,18 @@ def capture_args():
     contam.add_argument('--ref-trees', '-rt', action = 'store', metavar = '[diagnostic trees]',
         type = str, help = argparse.SUPPRESS)
 
+    contam.add_argument('--blen-mode', '-bl', action = 'store', default = 'median',
+        metavar = '[branch-length-eval]', type = str, help = argparse.SUPPRESS)
+
     contam.add_argument('--threads','-t', action = 'store', default = 4,
         metavar = '[Threads]', type = int, help = argparse.SUPPRESS)
 
     contam.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
 
-    contam.add_argument('--quiet', '-q', action = 'store_true', help = argparse.SUPPRESS)
+    contam.add_argument('--quiet', '-q', action = 'store_false', help = argparse.SUPPRESS)
 
     contam.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
 
-    contam.add_argument('--contam', default = True, help = argparse.SUPPRESS)
 
     # create the parse for the "msa" sub-command
     parser_msa = sub_parsers.add_parser('msa', usage = argparse.SUPPRESS, add_help = False,
@@ -267,7 +283,6 @@ def capture_args():
 
     msa_aln.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
         type = str, help = argparse.SUPPRESS)
-
 
     msa_aln.add_argument('--msa-dir', '-m', action = 'store', metavar = '[msa-directory]',
                 type = str, help = argparse.SUPPRESS)
@@ -335,19 +350,74 @@ def capture_args():
 
     msa_aln.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
 
-    msa_aln.add_argument('--quiet', '-q', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--quiet', '-q', action = 'store_false', help = argparse.SUPPRESS)
 
     msa_aln.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
 
     msa_aln.add_argument('--figures', action = 'store_true', help = argparse.SUPPRESS)
 
-    msa_aln.add_argument('--msa', default = True, help = argparse.SUPPRESS)
-
 
     # create the parse for the "tree" sub-command
-    parser_tree = sub_parsers.add_parser('tree', help=' phylogenetic tree reconstructions methods')
-    parser_tree.add_argument('--bas', type=str, help='sas are bad asses')
+    parser_tree = sub_parsers.add_parser('tree', usage = argparse.SUPPRESS, add_help = False,
+                        formatter_class = argparse.RawDescriptionHelpFormatter)
 
+    tree_gen = parser_tree.add_argument_group('General Phylogenetic Reconstruction Options', description = (
+    '''--msa-dir (-m)        directory of aligned MSAs\n\n'''
+    '''--out-dir (-o)        output directory name\n\n'''
+    '''--threads (-t)        number of CPU threads to use (default = 4)\n\n'''
+    '''--clean               remove intermediate files\n\n'''
+    '''--quiet (-q)          no console output\n\n'''
+    '''--gzip (-gz)          tar and gzip TIdeS output\n\n'''
+    '''--help (-h)           show this help message and exit\n'''))
+
+    tree_phy = parser_tree.add_argument_group('Phylogenetic Reconstruction Options', description = (
+    '''--fast-tree           phylogenetic tree construction with FastTree2\n\n'''
+    '''--iqtree              phylogenetic tree construction with IQTree2 (default)\n\n'''
+    '''--model               specify evolutionary model for phylogenetic tree
+                      reconstruction (LG+G, JTT, WAG, etc)\n\n'''
+    '''--model-sub           restrict to those AA models designed for either
+                      nuclear, mitochondrial, chloroplast or viral
+                      (default = nuclear)\n\n'''
+    '''--ufb, -B             number of ultrafast bootstraps
+                      (default = 1000)\n\n'''
+    '''--alrt                number of replicates (>=1000) to perform SH-like
+                      approximate likelihood ratio test (SH-aLRT)\n\n'''
+    '''--asteroid            species-tree construction with ASTEROID\n\n'''
+    '''--aster               species-tree construction with ASTER\n\n'''))
+
+
+    tree_gen.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
+                type = str, help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--msa-dir', '-m', action = 'store', metavar = '[msa-directory]',
+                type = str, help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--quiet', '-q', action = 'store_false', help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--model', action = 'store', default = 'MFP',
+        metavar = '[model]', type = str, help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--model-sub', action = 'store', default = 'nuclear',
+        metavar = '[model-set]', type = str, help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--ufb', '-B', action = 'store', default = 1000,
+        metavar = '[ultrafast bootstrap]', type = int, help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--alrt', action = 'store_true', help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--asteroid', action = 'store_true', help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--aster', action = 'store_true', help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--fast-tree', action = 'store_true', help = argparse.SUPPRESS)
+
+    tree_gen.add_argument('--iqtree', action = 'store_false', help = argparse.SUPPRESS)
 
     # create the parse for the "msa-tree" sub-command
     parser_msa_tree = sub_parsers.add_parser('msa-tree', usage = argparse.SUPPRESS, add_help = False,
@@ -370,7 +440,7 @@ def capture_args():
     '''--gf-list (-g)        list of gene families to align\n\n'''
     '''--taxon-list          list of taxa to include in MSAs\n\n'''
     '''--og-delim (-d)       delimiter for gene-family names\n\n'''
-    '''--msa-prog            alignment tool to use (MAFFT or WITCH; default = MAFFT)\n\n'''
+    '''--msa-prog            alignment tool to use (MAFFT or MUSCLE; default = MAFFT)\n\n'''
     '''--gap-thresh          gaps threshold for trimming column (0 - 1.0; default = 0.9)\n\n'''
     '''--clipkit             use clipkit and "smart-gap" for gap removal (default)\n\n'''
     '''--skip-filter         do not remove any sequences from the MSA\n\n'''
@@ -407,10 +477,12 @@ def capture_args():
                      outlier peptides with "sentence similarity"\n\n'''))
 
     msa_tree_phy = parser_msa_tree.add_argument_group('General Phylogenetic Reconstruction Options', description = (
-    '''--very-fast-tree      phylogenetic tree construction with VeryFastTree\n\n'''
+    '''--fast-tree           phylogenetic tree construction with FastTree2\n\n'''
     '''--iqtree              phylogenetic tree construction with IQTree2 (default)\n\n'''
     '''--model               specify evolutionary model for phylogenetic tree reconstruction
                       (LG+G, JTT, WAG, etc)\n\n'''
+    '''--model-sub            restrict to those AA models designed for either nuclear,
+                      mitochondrial, chloroplast or viral (default = nuclear)\n\n'''
     '''--ufb, -B             number of ultrafast bootstraps
                       (default = 1000)\n\n'''
     '''--alrt                UPDATE\n\n'''
@@ -418,6 +490,9 @@ def capture_args():
     '''--aster               species-tree construction with ASTER\n\n'''))
 
     msa_tree.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
+                type = str, help = argparse.SUPPRESS)
 
     msa_tree.add_argument('--msa-dir', '-m', action = 'store', metavar = '[msa-directory]',
                 type = str, help = argparse.SUPPRESS)
@@ -485,14 +560,17 @@ def capture_args():
 
     msa_tree.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
 
-    msa_tree.add_argument('--quiet', '-q', action = 'store_true', help = argparse.SUPPRESS)
+    msa_tree.add_argument('--quiet', '-q', action = 'store_false', help = argparse.SUPPRESS)
 
     msa_tree.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
 
     msa_tree.add_argument('--figures', action = 'store_true', help = argparse.SUPPRESS)
 
-    msa_tree.add_argument('--model', action = 'store', default = None,
+    msa_tree.add_argument('--model', action = 'store', default = 'MFP',
         metavar = '[model]', type = str, help = argparse.SUPPRESS)
+
+    msa_tree.add_argument('--model-sub', action = 'store', default = 'nuclear',
+        metavar = '[model-type]', type = str, help = argparse.SUPPRESS)
 
     msa_tree.add_argument('--ufb', '-B', action = 'store', default = 1000,
         metavar = '[ultrafast bootstrap]', type = int, help = argparse.SUPPRESS)
@@ -503,31 +581,67 @@ def capture_args():
 
     msa_tree.add_argument('--aster', action = 'store_true', help = argparse.SUPPRESS)
 
-    msa_tree.add_argument('--very-fast-tree', action = 'store_true', help = argparse.SUPPRESS)
+    msa_tree.add_argument('--fast-tree', action = 'store_true', help = argparse.SUPPRESS)
 
     msa_tree.add_argument('--iqtree', action = 'store_false', help = argparse.SUPPRESS)
 
-    msa_tree.add_argument('--msa-tree', default = True, help = argparse.SUPPRESS)
 
+    if len(sys.argv) == 1:
+#     print(ascii_logo_vsn())
+        parser.print_help()
+        sys.exit(0)
 
     args = parser.parse_args()
 
-    print(args)
+    return args
 
-def check_add_taxa_args(args):
-    pass
 
-def check_contam_args(args):
-    pass
+def double_check_args(args):
+    req_args = []
 
-def check_msa_args(args):
-    pass
+    if args.command in ['add-taxa', 'contam']:
+        if not args.input:
+            req_args.append('    --in <input-FASTA-file>')
 
-def check_tree_args(args):
-    pass
+        if not args.taxon_name:
+            req_args.append('    --taxon-name <taxon-name>')
 
-def check_msa_tree_args(args):
-    pass
+        if not args.db:
+            req_args.append('    --db <gene-family-database>')
 
-if __name__ == '__main__':
-    capture_args()
+    if args.command == 'contam':
+        if args.phylo:
+            if not args.ref_msa:
+                req_args.append('    --ref-msa <reference-msa-directory>')
+            if not args.ref_trees:
+                req_args.append('    --ref-msa <reference-tree-directory>')
+            if args.blen_mode.lower() not in ['median','average']:
+                req_args.append('    --blen-mode <"median" or "average">')
+
+    if args.command in ['msa','msa-tree', 'tree']:
+        if not args.out_dir:
+            req_args.append('    --out-dir <output-directory>')
+
+    if args.command in ['msa','msa-tree']:
+        if not args.msa_dir:
+            if not args.prot_dir:
+                req_args.append('    --prot-dir <peptide-directory>')
+
+            if not args.gf_list:
+                req_args.append('    --gf-list <gene-family-list>')
+
+            if not args.taxon_list:
+                req_args.append('    --taxon-list <taxon-list>')
+
+
+    if args.command == 'tree':
+        if not args.msa_dir:
+            req_args.append('    --msa-dir <aligned-msa-directory>')
+
+    if req_args:
+        print('\nERROR: Missing the following required arguments:')
+        print("\n".join(req_args) + '\n')
+        print(f'\nFor more information and options:\n    phyg.py {args.command} -h\n')
+        return False
+    else:
+        return True

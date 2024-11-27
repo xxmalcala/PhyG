@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-import glob, shutil, subprocess, sys
+import glob, shutil, subprocess, sys, time
 
 from collections import defaultdict
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from Bio import SeqIO
@@ -10,9 +11,9 @@ from Bio import SeqIO
 import pandas as pd
 
 # from bin import... MAKE SURE TO ADD THIS AFTER FINISHED TESTING!!!
-import phyg_add_taxa as at
-import phyg_ncbi_taxonomy as tx
-import phyg_tree_walk as pt
+from bin import phyg_add_taxa as at
+from bin import phyg_ncbi_taxonomy as tx
+from bin import phyg_tree_walk as pt
 
 
 """
@@ -29,44 +30,51 @@ decontamination tests.
 
 # MOVE THIS OR UPDATE SLIGHTLY?
 def prep_query_data(
+        start_time,
         fasta_file: str,
         query_taxon: str,
+        contam_dir: str,
         diag_db: str,
         gen_code: str = '1',
         taxon_code: str = None,
         transcripts: bool = True,
         genbank: bool = False,
         prokaryotic: bool = False,
-        threads: int = 4) -> None:
-
-    contam_dir = f'{query_taxon}_PhyG_Contam/'
+        threads: int = 4,
+        verbose: bool = False) -> None:
 
     if glob.glob(f'{contam_dir}*AA.fasta'):
-        print('query data is already prepared')
+        # print('query data is already prepared')
         out_pep_fas = glob.glob(f'{contam_dir}*AA.fasta')[0]
 
         return contam_dir, out_pep_fas
 
     elif transcripts:
         at.prep_transcriptomes(
+                start_time,
                 fasta_file,
                 contam_dir,
                 query_taxon,
                 taxon_code,
                 diag_db,
+                min_hit_cover = 10,
                 gen_code = gen_code,
-                threads = threads)
+                threads = threads,
+                verbose = verbose)
     else:
         at.prep_wgs(
+                start_time,
                 fasta_file,
                 contam_dir,
                 query_taxon,
                 taxon_code,
                 diag_db,
+                min_hit_cover = 10,
                 gen_code = gen_code,
                 genbank = genbank,
                 prokaryotic = prokaryotic,
-                threads = threads)
+                threads = threads,
+                verbose = verbose)
 
     out_pep_fas = glob.glob(f'{contam_dir}*AA.fasta')[0]
 
@@ -199,13 +207,15 @@ def kmer_from_seq(
 
 
 def knn_cluster(
+        start_time,
         query_orf_fasta: str,
         og_reference_fasta: str,
         query_taxon: str,
         kmer_len: int = 5,
         overlap: bool = True,
         clust_thresh: int = 3,
-        eval_thresh: float = 0.6):
+        eval_thresh: float = 0.6,
+        verbose: bool = False):
 
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.cluster import AgglomerativeClustering
@@ -236,9 +246,10 @@ def knn_cluster(
     for k in contam_taxonomy.keys():
         contam_taxonomy[k] = tx.search_ncbi_lineage(k, False)
 
-    # need to perform the KNN-graphing, hierarchical clustering, and summary for
-    # each gene family with the query taxon
+    # KNN-graphing, hierarchical clustering, and summary for each gene family with the query taxon
     for k, v in og_dict.items():
+        if verbose:
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic gene family {gf_num} of {len(og_dict)}', end = '\r')
         query_cluster_names = []
         eval_clusters = defaultdict(list)
         query_clusters = defaultdict(dict)
@@ -294,6 +305,9 @@ def knn_cluster(
 
         gf_num += 1
 
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic gene family {gf_num} of {len(og_dict)}')
+
     return out_data
 
 
@@ -348,7 +362,87 @@ def eval_query_clusters(
         return []
 
 
+def phylo_contam(
+        start_time,
+        contam_dir: str,
+        query_fas: str,
+        ref_msa: str,
+        ref_trees: str,
+        query_taxon: str,
+        blen_mode: str = 'median',
+        threads: int = 4,
+        verbose: bool = False):
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Starting Phylogeny-based By-Catch Check')
+
+    phylo_dir, phylo_file_dict = prep_query_peptides(
+                                    contam_dir,
+                                    query_fas)
+
+    query_msa_dir = phylo_dir.replace("_ORFs","_MSAs")
+    updated_tree_dir = f'{contam_dir}Phylo_Based_Contam/Updated_Trees/'
+
+    Path(query_msa_dir).mkdir(parents = True, exist_ok = True)
+    Path(updated_tree_dir).mkdir(parents = True, exist_ok = True)
+
+    for msa in glob.glob(f'{ref_msa}/*fasta'):
+        og = msa.rpartition("/")[-1].partition(".")[0]
+
+        if og in phylo_file_dict:
+            phylo_file_dict[og].append(msa)
+
+    for tree in glob.glob(f'{ref_trees}/*nwk'):
+        og = tree.rpartition("/")[-1].partition(".")[0]
+
+        if og in phylo_file_dict:
+            phylo_file_dict[og].append(tree)
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Adding Query Data to Reference MSAs')
+
+    for k, v in phylo_file_dict.items():
+        query_msa = mafft_align(
+                        query_msa_dir,
+                        query_taxon,
+                        k,
+                        v[0],
+                        v[1],
+                        threads = threads)
+
+        phylo_file_dict[k].append(query_msa)
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Adding Query Data to Reference Trees')
+
+    for k, v in phylo_file_dict.items():
+        if len(v) == 4:
+            run_epa_ng(
+                updated_tree_dir,
+                v[1],
+                v[2],
+                v[3],
+                threads = threads)
+
+    contam_trees_summary = pt.check_many_trees(
+                                start_time,
+                                updated_tree_dir,
+                                blen_mode,
+                                query_taxon = query_taxon,
+                                verbose = verbose)
+
+    phylo_contam_eval_trees(
+        start_time,
+        contam_trees_summary,
+        query_taxon,
+        updated_tree_dir.rpartition("Updated_Trees/")[0],
+        contam_dir,
+        blen_mode,
+        verbose)
+
+
 def knn_contam_eval(
+        start_time,
         out_dir: str,
         query_orf_fasta: str,
         og_reference_fasta: str,
@@ -356,29 +450,35 @@ def knn_contam_eval(
         kmer_len: int = 5,
         overlap: bool = True,
         clust_thresh: int = 3,
-        eval_thresh: float = 0.6):
+        eval_thresh: float = 0.6,
+        verbose: bool = False):
 
-    print('started knn-based bycatch assessment')
+    print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Starting KNN-based By-Catch Check')
 
     summary_dir = f'{out_dir}AlignFree_Contam/'
     Path(summary_dir).mkdir(parents = True, exist_ok = True)
 
-    out_base_tsv = f'{summary_dir}{query_taxon}.'
+    out_base_tsv = f'{summary_dir}{query_taxon}.PhyG_AlignFree_Contam.'
 
-    out_tsv = f'{out_base_tsv}PhyG_AlignFree_Contam.tsv'
+    out_tsv = f'{out_base_tsv}tsv'
 
     knn_summary_data = knn_cluster(
+                    start_time,
                     query_orf_fasta,
                     og_reference_fasta,
                     query_taxon,
                     kmer_len,
                     overlap,
                     clust_thresh,
-                    eval_thresh)
+                    eval_thresh,
+                    verbose)
 
     with open(out_tsv,'w+') as w:
         w.write('Query_Seq\tDomain\tMajor_Group\tMajor_Clade\tMinor_Clade\tCluster_Seq\tCluster_Taxon\n')
         w.write('\n'.join(knn_summary_data))
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Preparing By-Catch Check Output Tables')
 
     df = pd.read_table(out_tsv)
     df = df[df.Major_Clade != 'No-clear-major-clade']
@@ -430,86 +530,22 @@ def knn_contam_eval(
     shutil.copy2(out_dmn_sprgrp, out_dir)
 
 
-
-def phylo_contam(
-        contam_dir: str,
-        query_fas: str,
-        ref_msa: str,
-        ref_trees: str,
-        query_taxon: str,
-        blen_mode: str = 'median',
-        threads: int = 4):
-
-    print('running phylo-based contamination')
-    phylo_dir, phylo_file_dict = prep_query_peptides(
-                                    contam_dir,
-                                    query_fas)
-
-    query_msa_dir = phylo_dir.replace("_ORFs","_MSAs")
-    updated_tree_dir = f'{contam_dir}Phylo_Based_Contam/Updated_Trees/'
-
-    Path(query_msa_dir).mkdir(parents = True, exist_ok = True)
-    Path(updated_tree_dir).mkdir(parents = True, exist_ok = True)
-
-    for msa in glob.glob(f'{ref_msa}/*fasta'):
-        og = msa.rpartition("/")[-1].partition(".")[0]
-
-        if og in phylo_file_dict:
-            phylo_file_dict[og].append(msa)
-
-    for tree in glob.glob(f'{ref_trees}/*nwk'):
-        og = tree.rpartition("/")[-1].partition(".")[0]
-
-        if og in phylo_file_dict:
-            phylo_file_dict[og].append(tree)
-
-    for k, v in phylo_file_dict.items():
-        query_msa = mafft_align(
-                        query_msa_dir,
-                        query_taxon,
-                        k,
-                        v[0],
-                        v[1],
-                        threads = threads)
-
-        phylo_file_dict[k].append(query_msa)
-
-    for k, v in phylo_file_dict.items():
-        if len(v) == 4:
-            run_epa_ng(
-                updated_tree_dir,
-                v[1],
-                v[2],
-                v[3],
-                threads = threads)
-
-    contam_trees_summary = pt.check_many_trees(
-                                updated_tree_dir,
-                                blen_mode,
-                                query_taxon = query_taxon)
-
-    phylo_contam_eval(
-        contam_trees_summary,
-        query_taxon,
-        updated_tree_dir.rpartition("Updated_Trees/")[0],
-        contam_dir,
-        blen_mode)
-
-
-def phylo_contam_eval(
+def phylo_contam_eval_trees(
+        start_time,
         contam_trees_summary: dict,
         query_taxon: str,
         phylo_dir: str,
         out_dir: str,
-        blen_mode: str):
+        blen_mode: str,
+        verbose: bool = False):
 
     outdir = f'{phylo_dir}/Summary_Tables/'
 
     Path(outdir).mkdir(exist_ok = True, parents = True)
 
-    out_base_tsv = f'{outdir}{query_taxon}.'
+    out_base_tsv = f'{outdir}{query_taxon}.PhyG_PhyloBased_Contam.'
 
-    out_contam_data = f'{out_base_tsv}PhyG_PhyloBased_Contam.tsv'
+    out_contam_data = f'{out_base_tsv}tsv'
 
     with open(out_contam_data,'w+') as w:
         w.write('Taxon\tTaxon_Sequence\tGene_Family\tDomain\tMajor_Group\t' \
@@ -520,6 +556,9 @@ def phylo_contam_eval(
             if i[0] == query_taxon:
                 x = '\t'.join(i)
                 w.write(f'{x}\n')
+
+    if verbose:
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Preparing By-Catch Check Output Tables')
 
     df = pd.read_table(out_contam_data)
     df = df[df['Taxon'] == query_taxon]
@@ -547,46 +586,45 @@ def phylo_contam_eval(
 
     # euk_only.rename(columns={'Major_Group': 'Super_Group'}, inplace = True)
 
-    by_spr_grp = euk_only.Major_Group.value_counts()[:5]
-
-    by_mjr = euk_only.Major_Clade.value_counts()[:5]
+    # by_spr_grp = euk_only.Major_Group.value_counts()[:5]
+    #
+    # by_mjr = euk_only.Major_Clade.value_counts()[:5]
 
     by_sngl_sis = df[df.Sister_Taxa.str.count(';') < 1]
     by_sngl_sis = by_sngl_sis.groupby(['Domain','Major_Group','Major_Clade','Minor_Clade','Sister_Taxa']).size().reset_index().rename(columns={0:'Frequency'})
     by_sngl_sis_cnts = by_sngl_sis.value_counts()[:5]
 
-    all_sister_taxa = [i for j in df.Sister_Taxa.to_list() for i in j.split(",") if len(set(j.split(","))) == 1]
+    all_sister_taxa = [i for j in df.Sister_Taxa.to_list() for i in j.split(";") if len(set(j.split(";"))) == 1]
     common_single_sis = sorted(([i, all_sister_taxa.count(i)] for i in list(set(all_sister_taxa))), key = lambda x: -x[1])[:5]
 
-    out_dmn_sprgrp = f'{out_base_tsv}Domain_Supergroup.tsv'
+    # out_dmn_sprgrp = f'{out_base_tsv}Domain_Supergroup.tsv'
     out_dmn_sprgrp_short = f'{out_base_tsv}Domain_Supergroup.Short_Branch_Length.tsv'
 
     out_euk_spr_mjr_mnr = f'{out_base_tsv}Eukaryote.Summary.tsv'
-    out_euk_spr_mjr = f'{out_base_tsv}Eukaryote.Supergroup_MajorClade.tsv'
+    # out_euk_spr_mjr = f'{out_base_tsv}Eukaryote.Supergroup_MajorClade.tsv'
     out_euk_spr_mjr_short = f'{out_base_tsv}Eukaryote.Supergroup_MajorClade.Short_Branch_Length.tsv'
 
     top_sprgrp = f'{out_base_tsv}Top_Supergroups.tsv'
     top_mjr = f'{out_base_tsv}Top_MajorClades.tsv'
 
-    out_all_cmn_sis = f'{out_base_tsv}Top_Common_Sister_Taxa.tsv'
+    # out_all_cmn_sis = f'{out_base_tsv}Top_Common_Sister_Taxa.tsv'
     out_all_sngl_sis = f'{out_base_tsv}Top_Single_Sister_Taxa.tsv'
 
-    with open(out_all_cmn_sis, 'w+') as w:
-        w.write('Sister_Taxon\tCount\n')
-        for i in common_single_sis:
-            w.write(f'{i[0]}\t{i[1]}\n')
+    # with open(out_all_cmn_sis, 'w+') as w:
+    #     w.write('Sister_Taxon\tCount\n')
+    #     for i in common_single_sis:
+    #         w.write(f'{i[0]}\t{i[1]}\n')
 
-    dmn_sprgrp.to_csv(out_dmn_sprgrp, sep = '\t', index = False)
+    # dmn_sprgrp.to_csv(out_dmn_sprgrp, sep = '\t', index = False)
     dmn_sprgrp_short.to_csv(out_dmn_sprgrp_short, sep = '\t', index = False)
 
     euk_spr_mjr_mnr.to_csv(out_euk_spr_mjr_mnr, sep = '\t', index = False)
-    euk_spr_mjr.to_csv(out_euk_spr_mjr, sep = '\t', index = False)
+    # euk_spr_mjr.to_csv(out_euk_spr_mjr, sep = '\t', index = False)
     euk_spr_mjr_short.to_csv(out_euk_spr_mjr_short, sep = '\t', index = False)
 
     by_sngl_sis_cnts.to_csv(out_all_sngl_sis, sep = '\t')
-    by_spr_grp.to_csv(top_sprgrp, sep = '\t')
-    by_mjr.to_csv(top_mjr, sep = '\t')
-
+    # by_spr_grp.to_csv(top_sprgrp, sep = '\t')
+    # by_mjr.to_csv(top_mjr, sep = '\t')
 
     # shutil.copy2(out_dmn_sprgrp, out_dir)
     shutil.copy2(out_dmn_sprgrp_short, out_dir)
@@ -596,8 +634,10 @@ def phylo_contam_eval(
 
 
 def eval_contam(
+    start_time,
     fasta_file: str,
     query_taxon: str,
+    contam_dir: str,
     diag_db: str,
     gen_code: str = '1',
     taxon_code: str = None,
@@ -610,36 +650,76 @@ def eval_contam(
     blen_mode: str = 'median',
     clust_thresh: int = 3,
     eval_thresh: float = 0.6,
-    threads: int = 4) -> None:
+    threads: int = 4,
+    verbose: bool = True) -> None:
 
-    print('prepping query dataset')
     contam_dir, query_fas = prep_query_data(
+                                start_time,
                                 fasta_file,
                                 query_taxon,
+                                contam_dir,
                                 diag_db,
                                 gen_code,
                                 taxon_code,
                                 transcripts,
                                 genbank,
                                 prokaryotic,
-                                threads)
+                                threads,
+                                verbose)
+
+    if verbose:
+        print('\n#--------- Contamination Evaluation --------#')
 
     if phylo_base:
         phylo_contam(
-                contam_dir,
-                query_fas,
-                ref_msa,
-                ref_trees,
-                query_taxon,
-                blen_mode = blen_mode,
-                threads = threads)
+            start_time,
+            contam_dir,
+            query_fas,
+            ref_msa,
+            ref_trees,
+            query_taxon,
+            blen_mode = blen_mode,
+            threads = threads,
+            verbose = verbose)
 
 
     else:
+
         knn_contam_eval(
+            start_time,
             contam_dir,
             query_fas,
             diag_db,
             query_taxon,
             clust_thresh = clust_thresh,
-            eval_thresh = eval_thresh)
+            eval_thresh = eval_thresh,
+            verbose = verbose)
+
+if __name__ == '__main__':
+    try:
+        fasta_file = sys.argv[1]
+        query_taxon = sys.argv[2]
+        diag_db = sys.argv[3]
+
+    except:
+        print('Usage:\n\n    phyg_contam.py [FASTA-FILE] [TAXON-NAME] [ORF-DB]\n\n')
+        sys.exit(1)
+
+    if 'Picozoa' in query_taxon:
+        transcripts = False
+    else:
+        transcripts = True
+
+    ref_msa = '/home/dr_x/Desktop/PhyG/PhyG_Data/PhyG_Contam_Data/PhyG_Contam_MSAs/'
+    ref_tree = '/home/dr_x/Desktop/PhyG/PhyG_Data/PhyG_Contam_Data/PhyG_Contam_Trees/'
+    phylo_base = False
+
+    eval_contam(
+        fasta_file,
+        query_taxon,
+        diag_db,
+        transcripts = transcripts,
+        phylo_base = phylo_base,
+        ref_msa = ref_msa,
+        ref_trees = ref_tree,
+        threads = 24)
