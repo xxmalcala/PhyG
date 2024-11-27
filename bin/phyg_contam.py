@@ -222,7 +222,7 @@ def knn_cluster(
     from sklearn.neighbors import kneighbors_graph
 
     out_data = []
-    gf_num = 1
+    gf_num = 0
 
     og_dict = defaultdict(list)
     contam_taxonomy = {query_taxon: None}
@@ -248,6 +248,7 @@ def knn_cluster(
 
     # KNN-graphing, hierarchical clustering, and summary for each gene family with the query taxon
     for k, v in og_dict.items():
+        gf_num += 1
         if verbose:
             print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic gene family {gf_num} of {len(og_dict)}', end = '\r')
         query_cluster_names = []
@@ -303,10 +304,10 @@ def knn_cluster(
 
                 out_data += query_cluster_summary
 
-        gf_num += 1
+
 
     if verbose:
-        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic gene family {gf_num} of {len(og_dict)}')
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic gene family {gf_num-1} of {len(og_dict)}')
 
     return out_data
 

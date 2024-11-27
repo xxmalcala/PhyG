@@ -331,8 +331,9 @@ def check_many_trees(
         print('       Please adjust the ending extension of your phylogenetic trees.')
         sys.exit(1)
 
-    tree_num = 1
+    tree_num = 0
     for tree_file in all_tree_files:
+        tree_num += 1
         if verbose:
             print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic phylogeny {tree_num} of {len(all_tree_files)}', end = '\r')
         tfs, lt, t = score_tree(
@@ -346,7 +347,7 @@ def check_many_trees(
             continue
 
         comp_summary += tfs
-        tree_num += 1
+
 
     if verbose:
         print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic phylogeny {tree_num} of {len(all_tree_files)}')
