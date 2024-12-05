@@ -59,7 +59,7 @@ def parse_tree_file(
 
     for leaf in leaf_names:
         taxon_name = leaf.partition(taxon_delim)[0]
-        txnmy = tx.search_ncbi_lineage(leaf, False)
+        txnmy = tx.search_ncbi_lineage(taxon_name, False)
         leaf_taxonomy[leaf] = txnmy
         leaf_taxonomy[taxon_name] = txnmy
 
@@ -148,7 +148,7 @@ def check_same_taxon(
         taxon_delim: str = '|',
         reps: int = 0):
 
-    taxon_node_names = list(set([leaf.name.partition(taxon_delim)[0] for leaf in node.up.get_leaves()]))
+    taxon_node_names = list(set(['|'.join(leaf.name.split(taxon_delim)[:-2]) for leaf in node.up.get_leaves()]))
 
     if len(taxon_node_names) == 1:
         parent = node.up
@@ -231,7 +231,8 @@ def check_sisters(
         leaf_taxonomy,
         blen_mode,
         taxon_delim: str = '|',
-        query_taxon: str = None):
+        query_taxon: str = None,
+        taxon_code: str = None):
 
     tree_phylo_sister_summary = []
 
@@ -284,7 +285,8 @@ def score_tree(
     reroot_dir: str,
     blen_mode: str,
     taxon_delim: str,
-    query_taxon: str = None) -> list:
+    query_taxon: str = None,
+    taxon_code: str = None) -> list:
 
     tree, leaf_taxonomy = parse_tree_file(tree_file)
 
@@ -300,7 +302,8 @@ def score_tree(
                             leaf_taxonomy,
                             blen_mode,
                             taxon_delim,
-                            query_taxon)
+                            query_taxon,
+                            taxon_code)
 
     return tree_topo_summary, leaf_taxonomy, tree
 
@@ -311,6 +314,7 @@ def check_many_trees(
         blen_mode: str = 'median',
         taxon_delim: str = '|',
         query_taxon: str = None,
+        taxon_code: str = None,
         verbose: bool = False):
 
     reroot_dir = f'{tree_dir.rstrip("/")}_ReRooted/'
@@ -335,13 +339,14 @@ def check_many_trees(
     for tree_file in all_tree_files:
         tree_num += 1
         if verbose:
-            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic phylogeny {tree_num} of {len(all_tree_files)}', end = '\r')
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing Diagnostic Phylogeny {tree_num} of {len(all_tree_files)}', end = '\r')
         tfs, lt, t = score_tree(
                         tree_file,
                         reroot_dir,
                         blen_mode,
                         taxon_delim,
-                        query_taxon)
+                        query_taxon,
+                        taxon_code)
 
         if not tfs:
             continue
@@ -350,7 +355,7 @@ def check_many_trees(
 
 
     if verbose:
-        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processing diagnostic phylogeny {tree_num} of {len(all_tree_files)}')
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Processed {tree_num} of {len(all_tree_files)} Diagnostic Phylogenies')
 
     return comp_summary
 
@@ -393,6 +398,8 @@ def ortholog_by_clade(
                                 reroot_dir,
                                 blen_mode,
                                 taxon_delim)
+
+
 
     for seq in t_topo:
         d_eval, s_eval, m_eval = 'diff','diff','diff'
