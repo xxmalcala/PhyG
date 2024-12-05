@@ -22,7 +22,8 @@ def capture_args():
     '''msa             multi-sequence alignment methods\n\n'''
     '''tree            phylogenetic tree reconstructions methods\n\n'''
     '''msa-tree        multi-sequence alignment and
-                single-gene tree reconstructions\n\n'''),
+                single-gene tree reconstructions\n\n'''
+    '''genetic-code    infer genetic code (codon-to-amino acids)\n\n'''),
     help = argparse.SUPPRESS, dest = 'command')
 
     # create the parser for the "add-taxa" sub-command
@@ -43,15 +44,17 @@ def capture_args():
     '''--gen-code (-g)       translation table to use to translate ORFs (default = 1)\n\n'''
     '''--only-top-hit        keep only the top HSP-scoring hit for each gene-family\n\n'''
     '''--threads (-t)        number of CPU threads to use (default = 4)\n\n'''
-    '''--clean               remove intermediate files\n'''
-    '''--quiet (-q)          no console output\n'''
+    '''--stats               for when you want more stats and figures!\n\n'''
+    '''--clean               remove intermediate files\n\n'''
+    '''--quiet (-q)          no console output\n\n'''
     '''--gzip (-gz)          tar and gzip TIdeS output\n'''
-    '''--help (-h)           show this help message and exit\n'''))
+    '''--help (-h)           show this help message and exit\n\n'''))
 
     add_orfs = parser_add_taxa.add_argument_group('ORF and CDS Options', description = (
     '''--genbank             use if data are CDSs from GenBank or RefSeq\n'''
     '''--refseq              use if data are CDSs from GenBank or RefSeq\n'''
-    '''--all-isoforms        keep all CDS isoforms from a CDS file sourced from GenBank\n'''))
+    '''--all-isoforms        keep all CDS isoforms from a CDS file
+                      sourced from GenBank\n'''))
 
     add_txpts = parser_add_taxa.add_argument_group('Transcriptome Options', description = (
     '''--min-len             minimum transcript length to evaluate\n'''))
@@ -126,6 +129,8 @@ def capture_args():
 
     add_taxa.add_argument('--threads','-t', action = 'store', default = 4,
         metavar = '[Threads]', type = int, help = argparse.SUPPRESS)
+
+    add_taxa.add_argument('--stats', action = 'store_true', help = argparse.SUPPRESS)
 
     add_taxa.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
 
@@ -242,7 +247,7 @@ def capture_args():
     '''--clean               remove intermediate files\n\n'''
     '''--quiet (-q)          no console output\n\n'''
     '''--gzip (-gz)          tar and gzip TIdeS output\n\n'''
-    '''--figures             for when you want all the stats and figures!\n\n'''
+    '''--stats               for when you want more stats and figures!\n\n'''
     '''--help (-h)           show this help message and exit\n'''))
 
     msa_aln_filt = parser_msa.add_argument_group('General Filtering Options', description = (
@@ -354,7 +359,7 @@ def capture_args():
 
     msa_aln.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
 
-    msa_aln.add_argument('--figures', action = 'store_true', help = argparse.SUPPRESS)
+    msa_aln.add_argument('--stats', action = 'store_true', help = argparse.SUPPRESS)
 
 
     # create the parse for the "tree" sub-command
@@ -430,7 +435,7 @@ def capture_args():
     '''--clean               remove intermediate files\n\n'''
     '''--quiet (-q)          no console output\n\n'''
     '''--gzip (-gz)          tar and gzip TIdeS output\n\n'''
-    '''--figures             for when you want all the stats and figures!\n\n'''
+    '''--stats               for when you want all the stats and figures!\n\n'''
     '''--help (-h)           show this help message and exit\n'''))
 
     msa_tree_aln = parser_msa_tree.add_argument_group('General Alignment Options', description = (
@@ -564,7 +569,7 @@ def capture_args():
 
     msa_tree.add_argument('--gzip', '-gz', action = 'store_true', help = argparse.SUPPRESS)
 
-    msa_tree.add_argument('--figures', action = 'store_true', help = argparse.SUPPRESS)
+    msa_tree.add_argument('--stats', action = 'store_true', help = argparse.SUPPRESS)
 
     msa_tree.add_argument('--model', action = 'store', default = 'MFP',
         metavar = '[model]', type = str, help = argparse.SUPPRESS)
@@ -585,6 +590,48 @@ def capture_args():
 
     msa_tree.add_argument('--iqtree', action = 'store_false', help = argparse.SUPPRESS)
 
+
+    parser_gen_code = sub_parsers.add_parser('genetic-code', usage = argparse.SUPPRESS, add_help = False,
+                        formatter_class = argparse.RawDescriptionHelpFormatter)
+
+    gen_code = parser_gen_code.add_argument_group('General Genetic Code Options', description = (
+    '''--in (-i)             input FASTA file\n\n'''
+    '''--out-dir (-o)        output directory name\n\n'''
+    '''--taxon-name          taxon name (genus species)\n\n'''
+    '''--taxon-code          additional taxonomic code included\n\n'''
+    '''--db (-d)             gene-family database (FASTA or DIAMOND)\n\n'''
+    '''--threads (-t)        number of CPU threads to use (default = 4)\n\n'''
+    '''--clean               remove intermediate files\n\n'''
+    '''--quiet (-q)          no console output\n\n'''
+    '''--gzip (-gz)          tar and gzip TIdeS output\n\n'''
+    '''--help (-h)           show this help message and exit\n'''))
+
+
+    gen_code.add_argument('--help', '-h', action = "help", help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--input', '--in', '-i', action = 'store', metavar = '[FASTA-file]',
+        type = str, help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--out-dir','-o', action = 'store', metavar = '[output-directory]',
+        type = str, help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--taxon-name', action = 'store', metavar = '[taxon-name]',
+        nargs='+', type = str, help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--taxon-code', action = 'store', metavar = '[taxon-code]',
+        type = str, help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--db', '-d', action = 'store', metavar = '[OG Database]',
+        type = str, help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--threads','-t', action = 'store', default = 4,
+        metavar = '[Threads]', type = int, help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--clean', action = 'store_true', help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--quiet', '-q', action = 'store_false', help = argparse.SUPPRESS)
+
+    gen_code.add_argument('--gzip','-gz', action = 'store_true', help = argparse.SUPPRESS)
 
     if len(sys.argv) == 1:
 #     print(ascii_logo_vsn())
@@ -633,10 +680,20 @@ def double_check_args(args):
             if not args.taxon_list:
                 req_args.append('    --taxon-list <taxon-list>')
 
-
     if args.command == 'tree':
         if not args.msa_dir:
             req_args.append('    --msa-dir <aligned-msa-directory>')
+
+    if args.command == 'genetic-code':
+        if not args.input:
+            req_args.append('    --in <input-FASTA-file>')
+
+        if not args.db:
+            req_args.append('    --db <gene-family-database>')
+
+        if not (args.taxon_name or args.taxon_code):
+            req_args.append('    --taxon-name <taxon-name> OR\n' \
+            '    --taxon-code <taxon-code>')
 
     if req_args:
         print('\nERROR: Missing the following required arguments:')
