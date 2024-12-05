@@ -13,6 +13,7 @@ from pathlib import Path
 from bin import phyg_add_taxa as at
 from bin import phyg_contam as ctm
 from bin import phyg_eval_args as ea
+from bin import phyg_gen_util as gut
 from bin import phyg_orf_related as oc
 from bin import phyg_ncbi_taxonomy as nt
 
@@ -35,17 +36,13 @@ def eval_args(args):
         return args
 
 def add_new_taxa(args):
+    sttime = time.time()
+
+    args.taxon_dir = f'{args.taxon_dir}AddTaxa_PhyG'
+
     args.prok = eval_taxonomy(args.taxon_name)
     if args.prok:
         args.gen_code = '11'
-
-    sttime = time.time()
-    tax = args.taxon_name
-
-    if args.taxon_code:
-        tax = args.taxon_code
-
-    args.taxon_dir = f'{tax}_AddTaxa_PhyG'
 
     args.blast_based = True
 
@@ -88,6 +85,7 @@ def add_new_taxa(args):
                 args.only_top_hit,
                 args.blast_based,
                 args.threads,
+                args.stats,
                 args.quiet)
 
     else:
@@ -117,11 +115,15 @@ def add_new_taxa(args):
             args.prok,
             args.remove_isoforms,
             args.threads,
+            args.stats,
             args.quiet)
+
 
 def by_catch_assess(args):
 
     sttime = time.time()
+
+    args.taxon_dir = f'{args.taxon_dir}Contam_PhyG/'
 
     args.prok = eval_taxonomy(args.taxon_name)
     if args.prok:
@@ -129,12 +131,7 @@ def by_catch_assess(args):
 
     args.kmer = not args.phylo
 
-    tax = args.taxon_name
 
-    if args.taxon_code:
-        tax = args.taxon_code
-
-    args.taxon_dir = f'{tax}_Contam_PhyG/'
 
     if not args.transcripts and not args.orfs:
         if (args.refseq or args.genbank):
@@ -171,6 +168,33 @@ def by_catch_assess(args):
         args.eval_threshold,
         args.threads,
         args.quiet)
+
+def msa_processing(args):
+    pass
+
+def tree_processing(args):
+    pass
+
+def msa_tree_pipe(args):
+    pass
+
+def genetic_code_eval(args):
+
+    sttime = time.time()
+
+    out_xml = gut.eval_genetic_code(
+                sttime,
+                args.input,
+                args.db,
+                args.taxon_name,
+                args.taxon_code,
+                args.out_dir,
+                args.threads,
+                args.quiet)
+
+    if args.clean:
+        Path.unlink(Path.cwd() / out_xml)
+
 
 # def log_info(qparams: list, arg_vars: dict) -> None:
 #     for k in qparams:
@@ -234,7 +258,16 @@ if __name__ == '__main__':
     args = eval_args(ea.capture_args())
 
     if args.taxon_name:
-        args.taxon_name = '_'.join(args.taxon_name).replace(".","")
+        tax = args.taxon_name = '_'.join(args.taxon_name).replace(".","")
+
+        if args.taxon_code:
+            tax = args.taxon_code
+
+        if args.out_dir:
+            args.taxon_dir = f'{args.out_dir}/{tax}_'
+        else:
+            args.taxon_dir = f'{tax}_'
+
 
     if args.command == 'add-taxa':
         if args.quiet:
@@ -251,6 +284,14 @@ if __name__ == '__main__':
             print('#-------------------------------------------#')
 
         by_catch_assess(args)
+
+    if args.command == 'genetic-code':
+        if args.quiet:
+            print('\n#-------------------------------------------#')
+            print('#--------- Inferring Genetic Code ----------#')
+            print('#-------------------------------------------#')
+
+        genetic_code_eval(args)
 
     # print(args)
 
