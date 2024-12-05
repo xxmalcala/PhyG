@@ -9,10 +9,13 @@ from pathlib import Path
 
 # from bin import... MAKE SURE TO ADD THIS AFTER FINISHED TESTING!!!
 from bin import phyg_orf_related as oc
+from bin import phyg_gen_util as gut
+from bin import phyg_seq_stats as st
 
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
+
 
 def assess_seq_info(seq_description: str) -> list:
     """
@@ -44,7 +47,6 @@ def assess_seq_info(seq_description: str) -> list:
     else:
         prot_info = seq_description.partition('protein_id=')[2].partition(']')[0]
         return None, prot_info
-
 
 
 def check_complete_seq(
@@ -81,6 +83,7 @@ def check_complete_seq(
 def capture_isoforms(
         start_time,
         fasta_file: str,
+        longest_isoform: bool = False,
         prok: bool = False,
         verbose: bool = False) -> dict:
     """
@@ -114,7 +117,7 @@ def capture_isoforms(
             elif prot_info:
                 iso_dict[loc_info].append((prot_info, qseq))
 
-    if verbose:
+    if verbose and longest_isoform:
         print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Found {s} CDSs, {cs} are complete, from {len(iso_dict)} unique loci')
 
     return iso_dict
@@ -146,14 +149,15 @@ def save_isoforms(
     iso_dict = capture_isoforms(
                 start_time,
                 fasta_file,
+                longest_isoform,
                 prok,
                 verbose)
 
     for k, v in iso_dict.items():
         if longest_isoform:
             prot_id, seq_str = max(v, key=lambda x: len(x[1]))
-
             all_isoforms.append(SeqRecord(Seq(seq_str), prot_id, '', ''))
+
         else:
             for i in v:
                 all_isoforms.append(SeqRecord(Seq(i[1]), i[0], '', ''))
@@ -189,7 +193,7 @@ def eval_wgs_genbank(
         final_filt_fas = final_filt_fas.replace(taxon_name, taxon_code)
 
     if not remove_isoforms:
-        final_filt_fas.replace(".LongestIsoform",".ORFs")
+        final_filt_fas = final_filt_fas.replace(".LongestIsoform",".ORFs")
 
     final_seqs = []
     name_conversion = {}
@@ -212,16 +216,16 @@ def eval_wgs_genbank(
 
     else:
         isoforms_to_keep = save_isoforms(
-                                start_time,
-                                fasta_file,
-                                False,
-                                prokaryotic,
-                                verbose)
+                            start_time,
+                            fasta_file,
+                            False,
+                            prokaryotic,
+                            verbose)
 
     for i in isoforms_to_keep:
         seq_name = f'{taxon_name}{delim}{i.id}'
         if taxon_code:
-            seq_name = f'{taxon_code}{delim}{seq_name}'
+            seq_name = seq_name.replace(delim,f'{delim}{taxon_code}{delim}')
 
         name_conversion[i.id] = seq_name
         i.id = seq_name
@@ -263,7 +267,7 @@ def eval_wgs_non_gbk(
             seq_name = f'{taxon_name}{delim}{i.id.split(delim)[-1]}'
 
             if taxon_code:
-                seq_name = f'{taxon_code}{delim}{seq_name}'
+                seq_name = seq_name.replace(delim,f'{delim}{taxon_code}{delim}')
 
             name_conversion[i.id] = seq_name
             i.id = seq_name
@@ -323,7 +327,7 @@ def remove_short_seqs(
             seq_name = f'{taxon_name}{delim}'
 
             if taxon_code:
-                seq_name = f'{taxon_code}{delim}{seq_name}'
+                seq_name += f'{taxon_code}{delim}'
 
             seq_name += f'Transcript_{seq_num}_Length_{len(i)}'
             seq_num += 1
@@ -406,12 +410,15 @@ def remove_rRNA(
 
     Path(out_dir).mkdir(exist_ok = True, parents = True)
 
-    rRNA_seqs = run_barrnap(fasta_file, threads)
+    rRNA_contam, clean_seqs = [],[]
 
     rRNA_clean_fas = f'{out_dir}{taxon_name}.{min_len}bp.rRNA_Filtered.fasta'
     rRNA_fas = f'{out_dir}{taxon_name}.{min_len}bp.rRNA_Seqs.fasta'
 
-    rRNA_contam, clean_seqs = [],[]
+    if gut.check_file_exists(rRNA_clean_fas):
+        return rRNA_clean_fas
+
+    rRNA_seqs = run_barrnap(fasta_file, threads)
 
     # bin sequences as either putative rRNAs or "clean"
     for i in SeqIO.parse(fasta_file, 'fasta'):
@@ -455,7 +462,7 @@ def orf_calling(
         out_dir: str,
         taxon_name: str,
         fasta_file: str,
-        diamond_db: str,
+        orf_db: str,
         delim: str = '|',
         og_delim: str = '|',
         gen_code: str = '1',
@@ -479,7 +486,7 @@ def orf_calling(
                                             out_dir,
                                             fasta_file,
                                             taxon_name,
-                                            diamond_db,
+                                            orf_db,
                                             delim,
                                             og_delim,
                                             gen_code,
@@ -496,7 +503,22 @@ def orf_calling(
         return orf_call_fasta, og_hit_tsv
 
     else:
-        pass
+        orf_call_fasta = oc.orf_call_hmmer(
+                            start_time,
+                            out_dir,
+                            fasta_file,
+                            taxon_name,
+                            orf_db,
+                            delim,
+                            og_delim,
+                            gen_code,
+                            threads,
+                            evalue,
+                            top_hits_only,
+                            prots,
+                            verbose)
+
+        return orf_call_fasta, None
 
 
 def prep_transcriptomes(
@@ -518,6 +540,7 @@ def prep_transcriptomes(
         top_hits_only: bool = False,
         blast_based: bool = True,
         threads: int = 4,
+        stats: bool = False,
         verbose: bool = False) -> None:
 
     out_dir_bu = f'{taxon_dir}/Original/'
@@ -540,7 +563,7 @@ def prep_transcriptomes(
         fasta_file)
 
     if verbose:
-        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Removing short transcripts')
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Removing Short Transcripts')
 
     sfilt_fasta = remove_short_seqs(
                     out_dir_ss,
@@ -549,7 +572,7 @@ def prep_transcriptomes(
                     fasta_file)
 
     if verbose:
-        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Removing rRNA contamination')
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Removing rRNA Contamination')
 
     rrfilt_fasta = remove_rRNA(
                         out_dir_rr,
@@ -580,8 +603,10 @@ def prep_transcriptomes(
                                     top_hits_only,
                                     verbose = verbose)
 
+
     if verbose:
         print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Filtering Redundant ORFs')
+
 
     final_og_ntd_fasta = collapse_isoforms(
                             out_dir_of,
@@ -594,6 +619,20 @@ def prep_transcriptomes(
     final_og_aa_fasta = oc.translate_orfs(
                             final_og_ntd_fasta,
                             gen_code)
+
+    if stats:
+        if verbose:
+            print('\n#------- Producing Summary Statistics ------#')
+        out_dir_st = f'{taxon_dir}/Summary_Statistics/'
+        Path(out_dir_st).mkdir(parents = True, exist_ok = True)
+
+        st.get_seq_comp_enc(
+            final_og_ntd_fasta,
+            f'{out_dir_st}{tax}.OG_Assigned.Seq_Summary_Stats.tsv',
+            gen_code,
+            delim)
+
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Done Summarizing ORFs')
 
     if verbose:
         print('\n#--------- Backing Up Prepared ORFs --------#')
@@ -630,6 +669,7 @@ def prep_wgs(
         prokaryotic: bool = False,
         remove_isoforms: bool = True,
         threads: int = 4,
+        stats: bool = False,
         verbose: bool = False) -> None:
 
 
@@ -650,7 +690,7 @@ def prep_wgs(
         out_dir_bu,
         fasta_file)
 
-    if verbose:
+    if verbose and not remove_isoforms:
         print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Preparing CDSs')
 
     if genbank:
@@ -719,6 +759,15 @@ def prep_wgs(
 
     SeqIO.write(og_ntd_seqs, og_fasta.replace(".AA.fasta",".NTD.fasta"),'fasta')
 
+    if stats:
+        if verbose:
+            print('\n#------- Producing Summary Statistics ------#')
+        st.get_seq_comp_enc(
+            og_fasta.replace(".AA.fasta",".NTD.fasta"),
+            og_fasta.replace(".AA.fasta","Seq_Composition_Stats.tsv"),
+            gen_code,
+            delim)
+
     if verbose:
         print('\n#-------- Backing Up Finalized Data --------#')
 
@@ -756,8 +805,8 @@ def guess_data_type(
     """
 
     if verbose:
-        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Evaluating data type ' \
-            '(transcripts or CDSs) by in-frame stop codon frequency')
+        print('\n#---------- Evaluating Data Type -----------#')
+        print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Calculating In-Frame Stop Codon Frequency')
 
     out_dir_bu = f'{taxon_dir}/Original/'
 
@@ -807,9 +856,9 @@ def guess_data_type(
 
     if verbose:
         if likely_transcripts:
-            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Data type: likely transcripts')
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Data Type: Likely Transcripts')
 
         else:
-            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Data type: likely CDSs')
+            print(f'[{timedelta(seconds = round(time.time()-start_time))}]  Data Type: Likely CDSs')
 
     return likely_transcripts
