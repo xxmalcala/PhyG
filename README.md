@@ -12,4 +12,4 @@ See the [PhyG wiki](https://github.com/xxmalcala/PhyG/wiki) for more details abo
 * __Streamlining Phylogenomics__: Provides a streamlined 'start-to-finish' means to generate single-gene phylogenies and/or gene tree-species tree phylogenomic reconstructions.
 * __Alignment-Free Approaches__: Users can use alignment-free approaches for rapid data quality refinement and contamination assessment.
 
-**Currently targeting early December 2024 for full public release.**
+**Currently targeting early March 2025 for full public release.**
